@@ -23,7 +23,7 @@ if tabs == "Introduction":
     """)
     
     # Placeholder for Visual
-    st.image("https://via.placeholder.com/800x400.png?text=US+Wage+Distribution+Heatmap", 
+    st.image("https://raw.githubusercontent.com/Soorej30/wage_analysis/bc4905284376f6e295d09b80bbd250c8a19b5579/labor_dynamics.png", 
              caption="Figure 1: Conceptual visualization of wage distribution across the United States.")
 
     # Paragraph 2: Stakeholders
@@ -76,7 +76,7 @@ elif tabs == "Proposal Overview":
         st.write("- **Techniques:** Regression, Clustering, and EDA[cite: 11].")
 
     with col2:
-        st.image("https://via.placeholder.com/400x300.png?text=ML+Workflow+Diagram", 
+        st.image("https://raw.githubusercontent.com/Soorej30/wage_analysis/ccad2bf5306b1cf53ad2b9ec899f9b90502fbce1/flowchart.png", 
                  caption="Project Methodology Workflow")
 
     st.divider()
@@ -103,19 +103,23 @@ elif tabs == "Team":
     st.info("**Mission Statement:** To provide clarity in the labor market through transparent, data-driven analysis of wage structures.")
     
     team_members = [
-        {"name": "Soorej S Nair", "role": "Data Lead", "bio": "Specializes in data cleaning and ETL processes."},
-        {"name": "Anjana Anand", "role": "Visualization Lead", "bio": "Expert in creating intuitive and interactive dashboards."},
-        {"name": "Nivid Pathak", "role": "Modeling Lead", "bio": "Focused on regression analysis and predictive accuracy."},
-        {"name": "Karan Cheemalapati", "role": "Project Manager", "bio": "Ensures milestone alignment and documentation quality."}
+        {"name": "Soorej S Nair", "role": "Modeling Lead", "bio": "Focused on regression analysis and predictive accuracy.", "linkedin": "https://www.linkedin.com/in/soorej-s-nair-73559470/", "github": "https://github.com/Soorej30", "img_url": "https://raw.githubusercontent.com/Soorej30/wage_analysis/c2d935bdb9a66e86f67c4f6b50face29673f0dd6/Soorej_img.jpeg"},
+        {"name": "Anjana Anand", "role": "Visualization Lead", "bio": "Expert in creating intuitive and interactive dashboards.", "linkedin":"https://www.linkedin.com/in/anjana-anand-b63076398/", "github": "https://github.com/anjana5anand", "img_url": ""},
+        {"name": "Nivid Pathak", "role": "Data Lead", "bio": "Specializes in data cleaning and ETL processes.", "linkedin": " ", "github": " ", "img_url": ""},
+        {"name": "Karan Cheemalapati", "role": "Project Manager", "bio": "Ensures milestone alignment and documentation quality.", "linkedin": " ", "github": " ", "img_url": ""}
     ]
     
     for member in team_members:
         col_img, col_txt = st.columns([1, 4])
         with col_img:
-            st.image("https://via.placeholder.com/150", caption=member['name'])
+            try:
+                st.image(member["img_url"], caption=member['name'])
+            except:
+                st.image("https://via.placeholder.com/150", caption=member['name'])
+
         with col_txt:
             st.subheader(member['name'])
             st.write(f"**Role:** {member['role']}")
             st.write(member['bio'])
-            st.markdown("[LinkedIn](#) | [GitHub](#) | [Portfolio](#)")
+            st.markdown(f"[LinkedIn]({member['linkedin']}) | [GitHub]({member['github']})")
         st.divider()
