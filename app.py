@@ -13,54 +13,36 @@ st.set_page_config(page_title="Group 7 | Wage Variation Analysis", layout="wide"
 # Sidebar Navigation
 st.sidebar.title("Navigation")
 tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Analysis", "Team"])
+page_width = 1200
 
 if tabs == "Introduction":
     st.title("Labor Market Structure & Wage Prediction")
     st.subheader("Exploring the Drivers of Economic Compensation in the US")
 
     st.markdown("""
-    **Research Topic & Significance:** Our research focuses on the complex dynamics of the United States labor market, specifically targeting the structural factors that dictate wage variation across different sectors. 
-    Understanding these patterns is critical because wages are the primary driver of economic mobility and household stability for millions of Americans. By leveraging official labor statistics, we aim to decode why 
-    similar skill sets might yield vastly different financial outcomes depending on the industry or geography. This research serves as a vital tool for students and job seekers who are navigating 
-    an increasingly volatile economic landscape, providing them with data-driven insights rather than anecdotal evidence. Furthermore, policymakers can utilize these findings to identify 
-    under-compensated sectors or regions that may require targeted economic intervention or educational subsidies. The overarching goal is to transform raw labor data into a transparent map of the American 
-    economy, ensuring that the relationship between labor and reward is clearly understood by all stakeholders.
-    """)
+    **Research Topic & Significance:** We study the United States labor market to find the real reasons behind wage dispersion across industries. This matters because a paycheck is the main engine for economic mobility and keeping families afloat. We use official government stats to see why the same skills get a different price tag depending on the sector or location. This work helps students and applicants make choices based on hard numbers rather than just stories or guesses. Policy experts can also use this to spot wage stagnation or regions that need more investment. Our point is to make the link between labor and compensation clear for everyone.
+
+    """, width=page_width, )
     
     st.image("https://raw.githubusercontent.com/Soorej30/wage_analysis/aa3deedbafcedc549c97d4bfc18ff36b7840f2f2/images/labor_dynamics.png", 
-             caption="Figure 1: Conceptual visualization of wage distribution across the United States.")
+             caption="Figure 1: Conceptual visualization of wage distribution across the United States.", width=page_width)
 
     st.markdown("""
-    **Stakeholders:** The impact of this research extends across a broad spectrum of economic actors, from individual workers to multi-national corporations. Job seekers and students are the primary beneficiaries, 
-    as they can use these models to forecast potential earnings and make informed decisions about their educational investments. Organizations and HR departments also stand to benefit by 
-    benchmarking their compensation packages against national averages to remain competitive in the war for talent. On a macro level, economic researchers and government agencies like the Bureau of Labor Statistics 
-    rely on these analytical interpretations to refine their reporting and understand the efficacy of labor laws. Furthermore, career counselors and academic institutions can use these insights to tailor 
-    their curricula to the needs of high-growth, high-wage industries. Ultimately, anyone with a stake in the American workforce is affected by the underlying trends we aim to uncover.
-    """)
+    **Stakeholders:** This research affects a wide range of economic actors from individual employees to large multinational corporations. Students and job applicants are the main beneficiaries because they can use the data to calculate the return on investment for their human capital. Companies and HR departments also gain value by benchmarking their compensation structures against national figures to stay viable in talent acquisition. Economists and groups like the Bureau of Labor Statistics use these interpretations on a macro level to validate their reporting and test labor regulations. Career advisors use the findings to match their programs with industries showing rising wage premiums. Basically anyone involved in the labor force feels the effect of the trends we analyze.
+
+    """, width=page_width)
 
     st.markdown("""
-    **Existing Solutions & Gaps:** Current solutions for wage estimation often rely on static tables or simplified calculators provided by sites like Glassdoor or the BLS's own basic search tools. 
-    While these provide a baseline, they frequently fail to account for the interplay between multiple variables, such as how geographic location might amplify or diminish the value of a specific industry code. 
-    Literature suggests that while many models exist for predicting income, they often ignore the "Wage Suppression Bias" found in niche occupations where small employment groups lead to data gaps. 
-    Research by Smith et al. (2023) highlights that industry aggregation often hides role-specific nuances, leading to generalized predictions that don't apply to specialized technical roles. 
-    Our project seeks to fill this gap by using clustering techniques to identify sub-group patterns that traditional regression might overlook.
-    """)
+    **Existing Solutions & Gaps:** Current solutions for wage estimation often rely on static tables or simplified calculators provided by sites like Glassdoor or the BLS's own basic search tools. While these provide a baseline, they frequently fail to account for the interplay between multiple variables, such as how geographic location might amplify or diminish the value of a specific industry code. Literature suggests that while many models exist for predicting income, they often ignore the "Wage Suppression Bias" found in niche occupations where small employment groups lead to data gaps. Research by Smith et al. (2023) highlights that industry aggregation often hides role-specific nuances, leading to generalized predictions that don't apply to specialized technical roles. Our project seeks to fill this gap by using clustering techniques to identify sub-group patterns that traditional regression might overlook.
+    """, width=page_width)
 
     st.markdown("""
-    **Blueprint for Your Project:** Our team will execute a multi-phase analytical plan starting with rigorous exploratory data analysis (EDA) to handle missing values and wage suppression. 
-    We will then move into feature engineering, where we normalize wages by regional cost-of-living to ensure that high-salary states like California or New York are compared fairly against states with 
-    lower overhead. The modeling phase will involve training multiple machine learning algorithms, including Random Forests and Gradient Boosting, to predict Mean Annual Wages. 
-    We will also implement unsupervised learning (clustering) to see if we can discover "hidden" categories of jobs that share similar wage structures despite being in different industries. 
-    Finally, we will develop an interactive dashboard that allows users to input their occupation and location to receive a predicted wage percentile.
-    """)
+    **Blueprint for Your Project:** Our team will execute a multi-phase analytical plan starting with rigorous exploratory data analysis (EDA) to handle missing values and wage suppression. We will then move into feature engineering, where we normalize wages by regional cost-of-living to ensure that high-salary states like California or New York are compared fairly against states with lower overhead. The modeling phase will involve training multiple machine learning algorithms, including Random Forests and Gradient Boosting, to predict Mean Annual Wages. We will also implement unsupervised learning (clustering) to see if we can discover "hidden" categories of jobs that share similar wage structures despite being in different industries. Finally, we will develop an interactive dashboard that allows users to input their occupation and location to receive a predicted wage percentile.
+    """, width=page_width)
 
     st.markdown("""
-    **Dataset Considerations:** The primary engine of our analysis is the Occupational Employment and Wage Statistics (OEWS) dataset provided by the U.S. Bureau of Labor Statistics. 
-    This dataset is exceptionally robust, covering approximately 800 occupations and up to 40 variables, including mean, median, and various wage percentiles. 
-    We are also considering augmenting this with regional Consumer Price Index (CPI) data to further refine our geographic cost-of-living normalization. The public nature of the OEWS data ensures 
-    transparency, though we must remain vigilant regarding suppressed values in smaller employment groups. By combining these rich data sources, we believe we can build a predictive model 
-    that is both accurate and ethically grounded.
-    """)
+    **Dataset Considerations:** Our analysis runs on the Occupational Employment and Wage Statistics dataset from the Bureau of Labor Statistics. This source is robust and includes around 800 occupations along with variables like the mean and various wage percentiles. We plan to add regional Consumer Price Index data to improve our geographic adjustments. Using public OEWS data keeps things transparent even though we have to be careful with suppressed values in small employment pockets. Merging these rich sources allows us to build a predictive model that is accurate and grounded.
+    """, width=page_width)
 
 elif tabs == "Proposal Overview":
     st.title("Project Scope & Research Questions")
@@ -82,19 +64,24 @@ elif tabs == "Proposal Overview":
     
     st.header("Research Questions")
     questions = [
-        "1. What is the correlation between employment level and mean annual wage across all occupations? (Descriptive)",
-        "2. Which five industries currently offer the highest median wage for entry-level roles? (Descriptive)",
-        "3. How do wages for the same occupation title vary significantly between different US states? (Comparative)",
-        "4. Is there a statistically significant wage gap between 'Management' and 'Technical' roles within the same industry? (Comparative)",
-        "5. Can we accurately predict the 90th percentile wage of an occupation based on its 10th percentile and industry code? (Predictive)",
-        "6. Which geographic regions exhibit the highest 'wage-to-cost-of-living' ratio? (Comparative)",
-        "7. Can clustering identify groups of occupations that are underpaid relative to their required education levels? (Predictive/Pattern)",
-        "8. How has the wage gap between the 10th and 90th percentiles changed across the top 10 industries? (Descriptive)",
-        "9. To what extent does 'Industry Aggregation' obscure wage differences in specialized sub-roles? (Comparative) ",
-        "10. Can we predict if an occupation belongs to a 'High Growth' category based solely on its current wage percentiles? (Predictive)"
+        "1. Does the total number of people working in a field have a correlation with the mean annual wage occupation-wise?",
+        "2. If we look at the data right now which five industries are paying the best median wage for people in entry level roles?",
+        "3. Do we see a massive swing in pay for the exact same job title just by looking at different state data?",
+        "4. Is there a statistically significant wage gap between 'Management' and 'Technical' roles within the same industry? ",
+        "5. Can we accurately predict the 90th percentile wage of an occupation based on its 10th percentile and industry code? ",
+        "6. Which geographic regions exhibit the highest 'wage-to-cost-of-living' ratio? ",
+        "7. Can clustering identify groups of occupations that are underpaid relative to their required education levels?",
+        "8. How has the wage gap between the 10th and 90th percentiles changed across the top 10 industries? ",
+        "9. To what extent does 'Industry Aggregation' obscure wage differences in specialized sub-roles?  ",
+        "10. Can we predict if an occupation belongs to a 'High Growth' category based solely on its current wage percentiles? "
     ]
+
     for q in questions:
         st.write(q)
+
+elif tabs == "Analysis":
+    st.title("Data analysis")
+    st.info("The data analysis will be visible here once completed.")
 
 elif tabs == "Team":
     st.title("Meet Group 7")
@@ -232,6 +219,3 @@ elif tabs == "Data overview":
         except Exception as e:
             st.error(f"Could not load Excel from GitHub: {e}")
             st.info("You can open the raw file link above.")
-elif st.tabs == "Analysis":
-    st.title("Data analysis will soon be added.")
-    st.info("The data analysis will be visible here once completed.")
