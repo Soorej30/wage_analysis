@@ -1,18 +1,23 @@
 import streamlit as st
+from pathlib import Path
+import base64
+import requests
+import urllib.parse
+import pandas as pd
+import re
+import io
 
 # Page Configuration
 st.set_page_config(page_title="Group 7 | Wage Variation Analysis", layout="wide")
 
 # Sidebar Navigation
 st.sidebar.title("Navigation")
-tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "Team"])
+tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Analysis", "Team"])
 
-# --- TAB 1: INTRODUCTION ---
 if tabs == "Introduction":
     st.title("Labor Market Structure & Wage Prediction")
     st.subheader("Exploring the Drivers of Economic Compensation in the US")
 
-    # Paragraph 1: Research Topic & Significance
     st.markdown("""
     **Research Topic & Significance:** Our research focuses on the complex dynamics of the United States labor market, specifically targeting the structural factors that dictate wage variation across different sectors. 
     Understanding these patterns is critical because wages are the primary driver of economic mobility and household stability for millions of Americans. By leveraging official labor statistics, we aim to decode why 
@@ -22,11 +27,9 @@ if tabs == "Introduction":
     economy, ensuring that the relationship between labor and reward is clearly understood by all stakeholders.
     """)
     
-    # Placeholder for Visual
     st.image("https://raw.githubusercontent.com/Soorej30/wage_analysis/aa3deedbafcedc549c97d4bfc18ff36b7840f2f2/images/labor_dynamics.png", 
              caption="Figure 1: Conceptual visualization of wage distribution across the United States.")
 
-    # Paragraph 2: Stakeholders
     st.markdown("""
     **Stakeholders:** The impact of this research extends across a broad spectrum of economic actors, from individual workers to multi-national corporations. Job seekers and students are the primary beneficiaries, 
     as they can use these models to forecast potential earnings and make informed decisions about their educational investments[cite: 10]. Organizations and HR departments also stand to benefit by 
@@ -35,7 +38,6 @@ if tabs == "Introduction":
     their curricula to the needs of high-growth, high-wage industries. Ultimately, anyone with a stake in the American workforce is affected by the underlying trends we aim to uncover.
     """)
 
-    # Paragraph 3: Existing Solutions & Gaps
     st.markdown("""
     **Existing Solutions & Gaps:** Current solutions for wage estimation often rely on static tables or simplified calculators provided by sites like Glassdoor or the BLS's own basic search tools. 
     While these provide a baseline, they frequently fail to account for the interplay between multiple variables, such as how geographic location might amplify or diminish the value of a specific industry code[cite: 35, 36]. 
@@ -44,7 +46,6 @@ if tabs == "Introduction":
     Our project seeks to fill this gap by using clustering techniques to identify sub-group patterns that traditional regression might overlook[cite: 34].
     """)
 
-    # Paragraph 4: Blueprint for the Project
     st.markdown("""
     **Blueprint for Your Project:** Our team will execute a multi-phase analytical plan starting with rigorous exploratory data analysis (EDA) to handle missing values and wage suppression[cite: 11, 32]. 
     We will then move into feature engineering, where we normalize wages by regional cost-of-living to ensure that high-salary states like California or New York are compared fairly against states with 
@@ -53,7 +54,6 @@ if tabs == "Introduction":
     Finally, we will develop an interactive dashboard that allows users to input their occupation and location to receive a predicted wage percentile.
     """)
 
-    # Paragraph 5: Dataset Mention
     st.markdown("""
     **Dataset Considerations:** The primary engine of our analysis is the Occupational Employment and Wage Statistics (OEWS) dataset provided by the U.S. Bureau of Labor Statistics[cite: 13]. 
     This dataset is exceptionally robust, covering approximately 800 occupations and up to 40 variables, including mean, median, and various wage percentiles[cite: 16, 17, 25]. 
@@ -62,7 +62,6 @@ if tabs == "Introduction":
     that is both accurate and ethically grounded.
     """)
 
-# --- TAB 2: PROPOSAL OVERVIEW ---
 elif tabs == "Proposal Overview":
     st.title("Project Scope & Research Questions")
     
@@ -97,7 +96,6 @@ elif tabs == "Proposal Overview":
     for q in questions:
         st.write(q)
 
-# --- TAB 3: TEAM ---
 elif tabs == "Team":
     st.title("Meet Group 7")
     st.info("**Mission Statement:** To provide clarity in the labor market through transparent, data-driven analysis of wage structures.")
@@ -123,3 +121,117 @@ elif tabs == "Team":
             st.write(member['bio'])
             st.markdown(f"[LinkedIn]({member['linkedin']}) | [GitHub]({member['github']})")
         st.divider()
+
+elif tabs == "PDF Overview":
+    st.title("Our project overview")
+
+    pdf_github_raw = "https://raw.githubusercontent.com/Soorej30/wage_analysis/main/files/Milestone%200_%20Project%20Proposal%20Group%207.pdf"
+
+    viewer_url = f"https://docs.google.com/gview?url={urllib.parse.quote_plus(pdf_github_raw)}&embedded=true"
+
+    try:
+        st.components.v1.iframe(viewer_url, height=820)
+        st.markdown(f"[Open PDF in a new tab]({pdf_github_raw})")
+        st.download_button("Download PDF from GitHub", requests.get(pdf_github_raw, timeout=10).content, file_name=Path(pdf_github_raw).name)
+    except Exception as e:
+        st.warning(f"Could not embed PDF viewer: {e}")
+        try:
+            resp = requests.get(pdf_github_raw, timeout=10)
+            resp.raise_for_status()
+            pdf_bytes = resp.content
+            st.download_button("Download PDF from GitHub", pdf_bytes, file_name=Path(pdf_github_raw).name)
+            st.markdown(f"Open the PDF in a new tab: [Open PDF]({pdf_github_raw})")
+        except Exception as e2:
+            st.error(f"Could not fetch PDF: {e2}")
+            st.info("Update `pdf_github_raw` to a reachable raw URL or place a local PDF in files/ and use the download button.")
+
+    # Local fallback
+    local_pdf = Path("files/Milestone 0_ Project Proposal Group 7.pdf")
+    if local_pdf.exists():
+        pdf_bytes = local_pdf.read_bytes()
+        st.download_button("Download packaged PDF", pdf_bytes, file_name=local_pdf.name)
+
+elif tabs == "Data overview":
+    st.title("Our data overview")
+
+
+    owner = "Soorej30"
+    repo = "wage_analysis"
+    branch = "main"
+    base_path = "data"
+
+    @st.cache_data(show_spinner=False)
+    def github_list(path):
+        url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}"
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        return r.json()
+
+    try:
+        root = github_list(base_path)
+    except Exception as e:
+        st.error(f"Could not list GitHub data/ folder: {e}")
+        st.info("Check repo/branch and network access.")
+        root = []
+
+    year_files = {}
+    for item in root:
+        if item.get("type") != "dir":
+            continue
+        name = item.get("name", "")
+        m = re.search(r'oesm(\d+)st', name, re.IGNORECASE)
+        if not m:
+            continue
+        digits = m.group(1)
+        year = int(digits) if len(digits) > 2 else 2000 + int(digits)
+        try:
+            dir_contents = github_list(f"{base_path}/{name}")
+        except Exception:
+            dir_contents = []
+        files = [
+            {"name": f["name"], "path": f["path"]}
+            for f in dir_contents
+            if f.get("type") == "file"
+            and f["name"].lower().startswith("state_")
+            and f["name"].lower().endswith((".xls", ".xlsx"))
+        ]
+        if files:
+            year_files[str(year)] = sorted(files, key=lambda x: x["name"])
+
+    if not year_files:
+        st.info("No matching `oesm<number>st` subfolders with `state_*.xls*` files found on GitHub under data/.")
+    else:
+        years = sorted(year_files.keys(), reverse=True)
+        selected_year = st.selectbox("Select year (GitHub)", years, index=0)
+        files_for_year = year_files[selected_year]
+
+        if len(files_for_year) > 1:
+            names = [f["name"] for f in files_for_year]
+            chosen_name = st.selectbox("Choose file", names, index=0)
+            file_obj = next(f for f in files_for_year if f["name"] == chosen_name)
+        else:
+            file_obj = files_for_year[0]
+
+        raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_obj['path']}"
+        st.write(f"Showing GitHub file for year {selected_year} — {file_obj['name']}")
+        st.markdown(f"[Open raw file in new tab]({raw_url})")
+
+        @st.cache_data(show_spinner=False)
+        def load_excel_github(raw_url):
+            r = requests.get(raw_url, timeout=20)
+            r.raise_for_status()
+            return pd.read_excel(io.BytesIO(r.content))
+
+        try:
+            df = load_excel_github(raw_url)
+            st.write(f"Rows: {df.shape[0]} — Columns: {df.shape[1]}")
+            st.dataframe(df, use_container_width=True)
+            # provide download button for convenience
+            r = requests.get(raw_url, timeout=20)
+            st.download_button("Download this XLS file", r.content, file_name=file_obj["name"])
+        except Exception as e:
+            st.error(f"Could not load Excel from GitHub: {e}")
+            st.info("You can open the raw file link above.")
+elif st.tabs == "Analysis":
+    st.title("Data analysis will soon be added.")
+    st.info("The data analysis will be visible here once completed.")
