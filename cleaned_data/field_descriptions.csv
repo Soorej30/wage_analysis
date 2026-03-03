@@ -6,10 +6,10 @@ OCC_CODE,The 7-digit Standard Occupational Classification (SOC) code for the occ
 OCC_TITLE,The Standard Occupational Classification title for the occupation
 GROUP,"Contains ""major"" if this is a SOC major group occupation, otherwise this column is blank"
 TOT_EMP,The estimated total employment rounded to the nearest 10 (excludes self-employed)
-EMP_PRSE ¹,The percent relative standard error for the employment
+EMP_PRSE ï¿½,The percent relative standard error for the employment
 H_MEAN,The mean hourly wage
 A_MEAN,The mean annual wage 
-MEAN_PRSE ¹,The percent relative standard error for the mean wage
+MEAN_PRSE ï¿½,The percent relative standard error for the mean wage
 H_PCT10,The hourly 10th percentile wage
 H_PCT25,The hourly 25th percentile wage
 H_MEDIAN,The hourly median wage (or the 50th percentile)
@@ -20,5 +20,5 @@ A_PCT25,The annual 25th percentile wage
 A_MEDIAN,The annual median wage (or the 50th percentile)
 A_PCT75,The annual 75th percentile wage
 A_PCT90,The annual 90th percentile wage
-ANNUAL,"Contains ""TRUE"" if only the annual wages are released.  The OES program only releases the annual wage for some occupations that typically work fewer than 2080 hours per year, such as teachers, pilots, and entertainment workers."
-HOURLY,"Contains ""TRUE"" if only the hourly wages are released.  There is wide variation in the number of hours worked by those employed as actors, dancers, musicians, and singers. Many jobs are for a duration of 1 day or 1 week and it is extremely rare for a performer to have guaranteed employment for a period that exceeds 3 to 6 months."
+ANNUAL,"Contains TRUE if only the annual wages are released.  The OES program only releases the annual wage for some occupations that typically work fewer than 2080 hours per year, such as teachers, pilots, and entertainment workers."
+HOURLY,"Contains TRUE if only the hourly wages are released.  There is wide variation in the number of hours worked by those employed as actors, dancers, musicians, and singers. Many jobs are for a duration of 1 day or 1 week and it is extremely rare for a performer to have guaranteed employment for a period that exceeds 3 to 6 months."

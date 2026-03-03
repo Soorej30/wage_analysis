@@ -12,7 +12,7 @@ st.set_page_config(page_title="Group 7 | Wage Variation Analysis", layout="wide"
 
 # Sidebar Navigation
 st.sidebar.title("Navigation")
-tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Analysis", "Team"])
+tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Cleaned data", "Analysis", "Team"])
 page_width = 1200
 
 if tabs == "Introduction":
@@ -219,3 +219,130 @@ elif tabs == "Data overview":
         except Exception as e:
             st.error(f"Could not load Excel from GitHub: {e}")
             st.info("You can open the raw file link above.")
+
+elif tabs == "Cleaned data":
+    st.title("Cleaned data")
+
+    source = st.selectbox("Data source", ["Local", "GitHub"], index=0)
+    owner = "Soorej30"
+    repo = "wage_analysis"
+    branch = "main"
+    cleaned_path = "cleaned_data"
+
+    # Local listing
+    if source == "Local":
+        cleaned_dir = Path("cleaned_data")
+        if not cleaned_dir.exists():
+            st.warning(f"cleaned_data folder not found: {cleaned_dir.resolve()}")
+        else:
+            year_files = {}
+            for p in sorted(cleaned_dir.iterdir()):
+                if p.is_file() and p.name.lower().startswith("data_") and p.suffix.lower() == ".csv":
+                    m = re.search(r'data_(\d{4})', p.name, re.IGNORECASE)
+                    if m:
+                        year = m.group(1)
+                        year_files[year] = p
+
+            if not year_files:
+                st.info("No data_<year>.csv files found in cleaned_data/.")
+            else:
+                years = sorted(year_files.keys(), reverse=True)
+                selected_year = st.selectbox("Select year", years, index=0)
+                chosen_path = year_files[selected_year]
+                st.write(f"Showing cleaned data for year {selected_year} — {chosen_path.name}")
+
+                @st.cache_data(show_spinner=False)
+                def load_csv_local(path):
+                    try:
+                        return pd.read_csv(path)
+                    except Exception as e:
+                        return e
+
+                df_or_err = load_csv_local(chosen_path)
+                if isinstance(df_or_err, Exception):
+                    st.error(f"Error reading CSV file: {df_or_err}")
+                else:
+                    df = df_or_err
+                    st.write(f"Rows: {df.shape[0]} — Columns: {df.shape[1]}")
+                    st.dataframe(df, use_container_width=True)
+                    with open(chosen_path, "rb") as f:
+                        st.download_button("Download this CSV file", f.read(), file_name=chosen_path.name)
+
+                # show field_descriptions if present locally
+                field_desc_local = cleaned_dir / "field_descriptions.csv"
+                if field_desc_local.exists():
+                    try:
+                        fdesc = pd.read_csv(field_desc_local)
+                        st.markdown("### Field descriptions")
+                        st.dataframe(fdesc, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"Could not read local field_descriptions.csv: {e}")
+
+    # GitHub listing & loading
+    else:
+        @st.cache_data(show_spinner=False)
+        def github_list(path):
+            url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}"
+            r = requests.get(url, timeout=10)
+            r.raise_for_status()
+            return r.json()
+
+        try:
+            root = github_list(cleaned_path)
+        except Exception as e:
+            st.error(f"Could not list GitHub cleaned_data/ folder: {e}")
+            st.info("Check repo/branch and network access.")
+            root = []
+
+        year_files = {}
+        field_desc_info = None
+        for item in root:
+            if item.get("type") != "file":
+                continue
+            name = item.get("name", "")
+            if name.lower().startswith("data_") and name.lower().endswith(".csv"):
+                m = re.search(r'data_(\d{4})', name, re.IGNORECASE)
+                if m:
+                    year = m.group(1)
+                    year_files[year] = {"name": name, "path": item["path"]}
+            if name == "field_descriptions.csv":
+                field_desc_info = {"name": name, "path": item["path"]}
+
+        if not year_files:
+            st.info("No data_<year>.csv files found under cleaned_data/ on GitHub.")
+        else:
+            years = sorted(year_files.keys(), reverse=True)
+            selected_year = st.selectbox("Select year (GitHub)", years, index=0)
+            file_obj = year_files[selected_year]
+            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_obj['path']}"
+            st.write(f"Showing cleaned data for year {selected_year} — {file_obj['name']}")
+            st.markdown(f"[Open raw file in new tab]({raw_url})")
+
+            @st.cache_data(show_spinner=False)
+            def load_csv_github(raw_url):
+                r = requests.get(raw_url, timeout=20)
+                r.raise_for_status()
+                return pd.read_csv(io.BytesIO(r.content))
+
+            try:
+                df = load_csv_github(raw_url)
+                st.write(f"Rows: {df.shape[0]} — Columns: {df.shape[1]}")
+                st.dataframe(df, use_container_width=True)
+                r = requests.get(raw_url, timeout=20)
+                st.download_button("Download this CSV file", r.content, file_name=file_obj["name"])
+            except Exception as e:
+                st.error(f"Could not load CSV from GitHub: {e}")
+                st.info("You can open the raw file link above.")
+
+        # show field_descriptions.csv from GitHub if present
+        if field_desc_info:
+            fdesc_raw = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{field_desc_info['path']}"
+            st.markdown("### Field descriptions")
+            try:
+                r = requests.get(fdesc_raw, timeout=15)
+                r.raise_for_status()
+                fdesc_df = pd.read_csv(io.BytesIO(r.content))
+                st.dataframe(fdesc_df, use_container_width=True)
+                st.download_button("Download field_descriptions.csv", r.content, file_name=field_desc_info["name"])
+            except Exception as e:
+                st.warning(f"Could not load field_descriptions.csv from GitHub: {e}")
