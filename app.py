@@ -271,161 +271,182 @@ elif tabs == "Cleaned data":
                     with open(chosen_path, "rb") as f:
                         st.download_button("Download this CSV file", f.read(), file_name=chosen_path.name)
 
-                    # -----------------------
-                    # Summary statistics + similarity / integration
-                    # -----------------------
-                    st.markdown("## Summary statistics")
-                    num = df.select_dtypes(include=[np.number])
-                    if not num.empty:
-                        stats = pd.DataFrame({
-                            "mean": num.mean(),
-                            "median": num.median(),
-                            "variance": num.var(),
-                            "std": num.std(),
-                            "skewness": num.skew(),
-                            "count": num.count()
-                        })
-                        st.dataframe(stats.round(4), use_container_width=True)
-                    else:
-                        st.info("No numeric columns available for summary statistics.")
-
-                    st.markdown("## Data similarity & integration")
-                    # if there are other available cleaned years, compare to the previous year if present
+                # Field descriptions table (show local file if present, otherwise try GitHub raw)
+                st.markdown("### Field descriptions")
+                field_desc_local = cleaned_dir / "field_descriptions.csv"
+                if field_desc_local.exists():
                     try:
-                        available_years = sorted(year_files.keys(), reverse=True)
+                        fdesc = pd.read_csv(field_desc_local)
+                        st.dataframe(fdesc, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"Could not read local field_descriptions.csv: {e}")
+                else:
+                    # fallback to GitHub raw
+                    raw_fd = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/cleaned_data/field_descriptions.csv"
+                    try:
+                        r = requests.get(raw_fd, timeout=10)
+                        r.raise_for_status()
+                        fdesc = pd.read_csv(io.BytesIO(r.content))
+                        st.dataframe(fdesc, use_container_width=True)
+                        st.markdown(f"[Open field_descriptions.csv on GitHub]({raw_fd})")
                     except Exception:
-                        available_years = []
-                    similarity_msg = "No comparison data available."
-                    if available_years and selected_year in available_years:
-                        idx = available_years.index(selected_year)
-                        if idx < len(available_years) - 1:
-                            prev_year = available_years[idx + 1]
-                            prev_path = year_files[prev_year]
+                        st.info("field_descriptions.csv not found locally or on GitHub.")
+
+                # -----------------------
+                # Summary statistics + similarity / integration
+                # -----------------------
+                st.markdown("## Summary statistics")
+                num = df.select_dtypes(include=[np.number])
+                if not num.empty:
+                    stats = pd.DataFrame({
+                        "mean": num.mean(),
+                        "median": num.median(),
+                        "variance": num.var(),
+                        "std": num.std(),
+                        "skewness": num.skew(),
+                        "count": num.count()
+                    })
+                    st.dataframe(stats.round(4), use_container_width=True)
+                else:
+                    st.info("No numeric columns available for summary statistics.")
+
+                st.markdown("## Data similarity & integration")
+                # if there are other available cleaned years, compare to the previous year if present
+                try:
+                    available_years = sorted(year_files.keys(), reverse=True)
+                except Exception:
+                    available_years = []
+                similarity_msg = "No comparison data available."
+                if available_years and selected_year in available_years:
+                    idx = available_years.index(selected_year)
+                    if idx < len(available_years) - 1:
+                        prev_year = available_years[idx + 1]
+                        prev_path = year_files[prev_year]
+                        prev_df = None
+                        try:
+                            prev_df = load_csv_local(prev_path)
+                        except Exception:
                             prev_df = None
-                            try:
-                                prev_df = load_csv_local(prev_path)
-                            except Exception:
-                                prev_df = None
-                            if isinstance(prev_df, pd.DataFrame):
-                                # compare numeric column means (intersection)
-                                n1 = df.select_dtypes(include=[np.number])
-                                n2 = prev_df.select_dtypes(include=[np.number])
-                                common = n1.columns.intersection(n2.columns)
-                                if len(common) >= 1:
-                                    v1 = n1[common].mean().fillna(0)
-                                    v2 = n2[common].mean().fillna(0)
-                                    # Pearson correlation between mean vectors
-                                    corr = v1.corr(v2)
-                                    jaccard = len(set(df.columns).intersection(set(prev_df.columns))) / len(set(df.columns).union(set(prev_df.columns)))
-                                    st.write(f"Compared to previous available year: {prev_year}")
-                                    st.write(f"- Pearson correlation of numeric-column means: {corr:.4f}")
-                                    st.write(f"- Column-name Jaccard similarity: {jaccard:.4f}")
-                                else:
-                                    st.info("No common numeric columns to compare with previous year.")
+                        if isinstance(prev_df, pd.DataFrame):
+                            # compare numeric column means (intersection)
+                            n1 = df.select_dtypes(include=[np.number])
+                            n2 = prev_df.select_dtypes(include=[np.number])
+                            common = n1.columns.intersection(n2.columns)
+                            if len(common) >= 1:
+                                v1 = n1[common].mean().fillna(0)
+                                v2 = n2[common].mean().fillna(0)
+                                # Pearson correlation between mean vectors
+                                corr = v1.corr(v2)
+                                jaccard = len(set(df.columns).intersection(set(prev_df.columns))) / len(set(df.columns).union(set(prev_df.columns)))
+                                st.write(f"Compared to previous available year: {prev_year}")
+                                st.write(f"- Pearson correlation of numeric-column means: {corr:.4f}")
+                                st.write(f"- Column-name Jaccard similarity: {jaccard:.4f}")
                             else:
-                                st.info("Previous year file could not be loaded for comparison.")
+                                st.info("No common numeric columns to compare with previous year.")
                         else:
-                            st.info("No earlier cleaned year available for comparison.")
+                            st.info("Previous year file could not be loaded for comparison.")
                     else:
-                        st.info(similarity_msg)
+                        st.info("No earlier cleaned year available for comparison.")
+                else:
+                    st.info(similarity_msg)
 
-                    st.markdown("---")
-                    st.markdown("## Visualizations")
+                st.markdown("---")
+                st.markdown("## Visualizations")
 
-                    # 1) Heatmap of correlations
-                    try:
-                        if not num.empty:
-                            corr = num.corr()
-                            fig = px.imshow(
-                                corr,
-                                text_auto=True,
-                                color_continuous_scale="RdBu_r",
-                                title="Feature Correlation Heatmap"
-                            )
-                            fig.update_layout(height=800, margin=dict(l=40, r=40, t=80, b=40))
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info("No numeric columns to compute correlations.")
-                    except Exception as e:
-                        st.warning(f"Could not create correlation heatmap: {e}")
+                # 1) Heatmap of correlations
+                try:
+                    if not num.empty:
+                        corr = num.corr()
+                        fig = px.imshow(
+                            corr,
+                            text_auto=True,
+                            color_continuous_scale="RdBu_r",
+                            title="Feature Correlation Heatmap"
+                        )
+                        fig.update_layout(height=800, margin=dict(l=40, r=40, t=80, b=40))
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No numeric columns to compute correlations.")
+                except Exception as e:
+                    st.warning(f"Could not create correlation heatmap: {e}")
 
-                    # 2) Pie chart for STATE vs number of rows
-                    try:
-                        if "STATE" in df.columns:
-                            state_counts = df["STATE"].fillna("Unknown").value_counts()
-                            fig = px.pie(
-                                names=state_counts.index,
-                                values=state_counts.values,
-                                title="Distribution of rows by STATE"
-                            )
-                            fig.update_traces(textposition="inside", textinfo="percent+label")
-                            fig.update_layout(height=700, margin=dict(l=40, r=40, t=80, b=40))
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info("Column 'STATE' not found for pie chart.")
-                    except Exception as e:
-                        st.warning(f"Could not create state pie chart: {e}")
+                # 2) Pie chart for STATE vs number of rows
+                try:
+                    if "STATE" in df.columns:
+                        state_counts = df["STATE"].fillna("Unknown").value_counts()
+                        fig = px.pie(
+                            names=state_counts.index,
+                            values=state_counts.values,
+                            title="Distribution of rows by STATE"
+                        )
+                        fig.update_traces(textposition="inside", textinfo="percent+label")
+                        fig.update_layout(height=700, margin=dict(l=40, r=40, t=80, b=40))
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Column 'STATE' not found for pie chart.")
+                except Exception as e:
+                    st.warning(f"Could not create state pie chart: {e}")
 
-                    # 3) Stacked bar chart of OCC_TITLE vs count stacked by STATE (top N OCC_TITLE)
-                    try:
-                        if "OCC_TITLE" in df.columns and "STATE" in df.columns:
-                            top_n = 10
-                            occ_counts = df.groupby("OCC_TITLE").size().sort_values(ascending=False).head(top_n)
-                            top_occs = occ_counts.index.tolist()
-                            pivot = (
-                                df[df["OCC_TITLE"].isin(top_occs)]
-                                .groupby(["OCC_TITLE", "STATE"])
-                                .size()
-                                .reset_index(name="count")
-                            )
-                            fig = px.bar(
-                                pivot,
-                                x="OCC_TITLE",
-                                y="count",
-                                color="STATE",
-                                title=f"Top {top_n} OCC_TITLE counts stacked by STATE"
-                            )
-                            fig.update_layout(barmode="stack", xaxis={'categoryorder': 'total descending'}, height=800, margin=dict(l=60, r=40, t=80, b=200))
-                            fig.update_xaxes(tickangle=-45)
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info("Columns 'OCC_TITLE' and/or 'STATE' missing for stacked bar.")
-                    except Exception as e:
-                        st.warning(f"Could not create stacked bar chart: {e}")
+                # 3) Stacked bar chart of OCC_TITLE vs count stacked by STATE (top N OCC_TITLE)
+                try:
+                    if "OCC_TITLE" in df.columns and "STATE" in df.columns:
+                        top_n = 10
+                        occ_counts = df.groupby("OCC_TITLE").size().sort_values(ascending=False).head(top_n)
+                        top_occs = occ_counts.index.tolist()
+                        pivot = (
+                            df[df["OCC_TITLE"].isin(top_occs)]
+                            .groupby(["OCC_TITLE", "STATE"])
+                            .size()
+                            .reset_index(name="count")
+                        )
+                        fig = px.bar(
+                            pivot,
+                            x="OCC_TITLE",
+                            y="count",
+                            color="STATE",
+                            title=f"Top {top_n} OCC_TITLE counts stacked by STATE"
+                        )
+                        fig.update_layout(barmode="stack", xaxis={'categoryorder': 'total descending'}, height=800, margin=dict(l=60, r=40, t=80, b=200))
+                        fig.update_xaxes(tickangle=-45)
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Columns 'OCC_TITLE' and/or 'STATE' missing for stacked bar.")
+                except Exception as e:
+                    st.warning(f"Could not create stacked bar chart: {e}")
 
-                    # 4) Bubble chart (updated): OCC_TITLE on x, STATE on y, bubble size = TOT_EMP, color = H_MEDIAN
-                    try:
-                        needed = {"OCC_TITLE", "STATE", "TOT_EMP", "H_MEDIAN"}
-                        if needed.issubset(set(df.columns)):
-                            # aggregate by occupation + state
-                            agg = (
-                                df.groupby(["OCC_TITLE", "STATE"])
-                                .agg(TOT_EMP=("TOT_EMP", "sum"), H_MEDIAN=("H_MEDIAN", "mean"))
-                                .reset_index()
-                            )
+                # 4) Bubble chart (updated): OCC_TITLE on x, STATE on y, bubble size = TOT_EMP, color = H_MEDIAN
+                try:
+                    needed = {"OCC_TITLE", "STATE", "TOT_EMP", "H_MEDIAN"}
+                    if needed.issubset(set(df.columns)):
+                        # aggregate by occupation + state
+                        agg = (
+                            df.groupby(["OCC_TITLE", "STATE"])
+                            .agg(TOT_EMP=("TOT_EMP", "sum"), H_MEDIAN=("H_MEDIAN", "mean"))
+                            .reset_index()
+                        )
 
-                            # limit to top occupations by total employment to avoid clutter
-                            top_occs = agg.groupby("OCC_TITLE")["TOT_EMP"].sum().nlargest(30).index.tolist()
-                            agg = agg[agg["OCC_TITLE"].isin(top_occs)]
+                        # limit to top occupations by total employment to avoid clutter
+                        top_occs = agg.groupby("OCC_TITLE")["TOT_EMP"].sum().nlargest(30).index.tolist()
+                        agg = agg[agg["OCC_TITLE"].isin(top_occs)]
 
-                            fig = px.scatter(
-                                agg,
-                                x="OCC_TITLE",
-                                y="STATE",
-                                size="TOT_EMP",
-                                color="H_MEDIAN",
-                                hover_name="OCC_TITLE",
-                                title="OCC_TITLE vs STATE — bubble size = TOT_EMP, color = H_MEDIAN",
-                                size_max=120
-                            )
-                            fig.update_layout(height=1300, margin=dict(l=60, r=40, t=80, b=200))
-                            fig.update_xaxes(tickangle=-45, automargin=True)
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.info("Columns 'OCC_TITLE', 'STATE', 'TOT_EMP', and 'H_MEDIAN' are required for this bubble chart.")
-                    except Exception as e:
-                        st.warning(f"Could not create bubble chart: {e}")
-                    st.markdown("---")
+                        fig = px.scatter(
+                            agg,
+                            x="OCC_TITLE",
+                            y="STATE",
+                            size="TOT_EMP",
+                            color="H_MEDIAN",
+                            hover_name="OCC_TITLE",
+                            title="OCC_TITLE vs STATE — bubble size = TOT_EMP, color = H_MEDIAN",
+                            size_max=120
+                        )
+                        fig.update_layout(height=1300, margin=dict(l=60, r=40, t=80, b=200))
+                        fig.update_xaxes(tickangle=-45, automargin=True)
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("Columns 'OCC_TITLE', 'STATE', 'TOT_EMP', and 'H_MEDIAN' are required for this bubble chart.")
+                except Exception as e:
+                    st.warning(f"Could not create bubble chart: {e}")
+                st.markdown("---")
 
 elif tabs == "Inspection and reflection":
     st.title("Inspection & Reflection")
