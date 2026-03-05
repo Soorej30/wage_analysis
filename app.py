@@ -8,13 +8,14 @@ import re
 import io
 import numpy as np
 import plotly.express as px
+import json
 
 # Page Configuration
 st.set_page_config(page_title="Group 7 | Wage Variation Analysis", layout="wide")
 
 # Sidebar Navigation
 st.sidebar.title("Navigation")
-tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Cleaned data", "Analysis", "Team"])
+tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Cleaned data", "Inspection and reflection", "Analysis", "Team"])
 page_width = 1200
 
 if tabs == "Introduction":
@@ -392,25 +393,196 @@ elif tabs == "Cleaned data":
                     except Exception as e:
                         st.warning(f"Could not create stacked bar chart: {e}")
 
-                    # 4) Bubble chart for OCC_TITLE vs TOT_EMP
+                    # 4) Bubble chart (updated): OCC_TITLE on x, STATE on y, bubble size = TOT_EMP, color = H_MEDIAN
                     try:
-                        if "OCC_TITLE" in df.columns and "TOT_EMP" in df.columns:
-                            agg = df.groupby("OCC_TITLE")["TOT_EMP"].sum().reset_index()
-                            agg = agg.dropna(subset=["TOT_EMP"]).sort_values("TOT_EMP", ascending=False).head(30)
+                        needed = {"OCC_TITLE", "STATE", "TOT_EMP", "H_MEDIAN"}
+                        if needed.issubset(set(df.columns)):
+                            # aggregate by occupation + state
+                            agg = (
+                                df.groupby(["OCC_TITLE", "STATE"])
+                                .agg(TOT_EMP=("TOT_EMP", "sum"), H_MEDIAN=("H_MEDIAN", "mean"))
+                                .reset_index()
+                            )
+
+                            # limit to top occupations by total employment to avoid clutter
+                            top_occs = agg.groupby("OCC_TITLE")["TOT_EMP"].sum().nlargest(30).index.tolist()
+                            agg = agg[agg["OCC_TITLE"].isin(top_occs)]
+
                             fig = px.scatter(
                                 agg,
                                 x="OCC_TITLE",
-                                y="TOT_EMP",
+                                y="STATE",
                                 size="TOT_EMP",
-                                color="TOT_EMP",
-                                title="Bubble chart: OCC_TITLE vs TOT_EMP (top 30)",
+                                color="H_MEDIAN",
+                                hover_name="OCC_TITLE",
+                                title="OCC_TITLE vs STATE — bubble size = TOT_EMP, color = H_MEDIAN",
                                 size_max=120
                             )
-                            fig.update_layout(height=800, margin=dict(l=60, r=40, t=80, b=200))
-                            fig.update_xaxes(tickangle=-45)
+                            fig.update_layout(height=1300, margin=dict(l=60, r=40, t=80, b=200))
+                            fig.update_xaxes(tickangle=-45, automargin=True)
                             st.plotly_chart(fig, use_container_width=True)
                         else:
-                            st.info("Columns 'OCC_TITLE' and/or 'TOT_EMP' missing for bubble chart.")
+                            st.info("Columns 'OCC_TITLE', 'STATE', 'TOT_EMP', and 'H_MEDIAN' are required for this bubble chart.")
                     except Exception as e:
                         st.warning(f"Could not create bubble chart: {e}")
                     st.markdown("---")
+
+elif tabs == "Inspection and reflection":
+    st.title("Inspection & Reflection")
+    reports_dir = Path("cleaned_data/reports")
+
+    # helper loaders (local first, GitHub fallback)
+    @st.cache_data(show_spinner=False)
+    def load_json_local(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            return e
+
+    @st.cache_data(show_spinner=False)
+    def load_text_local(path):
+        try:
+            return Path(path).read_text(encoding="utf-8")
+        except Exception as e:
+            return e
+
+    # try local files
+    insp_path = reports_dir / "consolidated_inspection.json"
+    refl_json_path = reports_dir / "consolidated_reflection.json"
+    refl_txt_path = reports_dir / "consolidated_reflection.txt"
+
+    inspection = None
+    reflection_text = None
+
+    if insp_path.exists():
+        inspection = load_json_local(insp_path)
+    else:
+        st.info("Local consolidated_inspection.json not found in cleaned_data/reports/.")
+    # reflection: prefer JSON, else TXT
+    if refl_json_path.exists():
+        reflection = load_json_local(refl_json_path)
+        if isinstance(reflection, dict):
+            reflection_text = json.dumps(reflection, indent=2)
+        else:
+            reflection_text = None
+    elif refl_txt_path.exists():
+        reflection_text = load_text_local(refl_txt_path)
+    else:
+        st.info("Local consolidated_reflection.* not found in cleaned_data/reports/.")
+
+    # If local missing, try GitHub raw fallback
+    if inspection is None or reflection_text is None:
+        owner = "Soorej30"
+        repo = "wage_analysis"
+        branch = "main"
+        base = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/cleaned_data/reports"
+        try:
+            if inspection is None:
+                r = requests.get(f"{base}/consolidated_inspection.json", timeout=10)
+                if r.ok:
+                    inspection = r.json()
+            if reflection_text is None:
+                # try json first
+                r2 = requests.get(f"{base}/consolidated_reflection.json", timeout=10)
+                if r2.ok:
+                    try:
+                        reflection_text = json.dumps(r2.json(), indent=2)
+                    except Exception:
+                        reflection_text = r2.text
+                else:
+                    r3 = requests.get(f"{base}/consolidated_reflection.txt", timeout=10)
+                    if r3.ok:
+                        reflection_text = r3.text
+        except Exception:
+            pass
+
+    if not inspection:
+        st.error("Could not load consolidated_inspection.json.")
+        st.stop()
+
+    # years available
+    years = sorted(inspection.get("per_year", {}).keys(), reverse=True)
+    if not years:
+        st.info("No per_year data found in consolidated_inspection.json")
+        st.stop()
+
+    st.sidebar.markdown("## Inspection controls")
+    selected_years = st.sidebar.multiselect("Select 1 or 2 years to inspect / compare", years, default=[years[0]])
+    if not selected_years:
+        st.info("Choose at least one year from the sidebar.")
+        st.stop()
+
+    # show overall JSON (collapsible)
+    with st.expander("Raw consolidated_inspection.json (preview)"):
+        st.json(inspection)
+
+    # show reflection
+    if reflection_text:
+        with st.expander("Reflection / notes"):
+            st.text(reflection_text)
+
+    # When one year selected -> show summary table and top numeric means
+    def numeric_means_for_year(year):
+        ny = inspection["per_year"].get(year, {})
+        ns = ny.get("numeric_summary", {})
+        means = {}
+        for col, stats in ns.items():
+            m = stats.get("mean")
+            if m is not None:
+                try:
+                    means[col] = float(m)
+                except Exception:
+                    continue
+        return pd.Series(means, name=year)
+
+    if len(selected_years) == 1:
+        y = selected_years[0]
+        st.subheader(f"Summary for {y}")
+        per = inspection["per_year"].get(y, {})
+        st.write(f"Rows: {per.get('n_rows')} — Columns: {per.get('n_cols')}")
+        st.markdown("### Missingness (top keys)")
+        missing = per.get("missing_pct", {})
+        if missing:
+            miss_df = pd.Series(missing, name="missing_pct").sort_values(ascending=False).head(20)
+            st.dataframe(miss_df.to_frame(), use_container_width=True)
+        st.markdown("### Numeric means (top 20 by mean)")
+        s = numeric_means_for_year(y)
+        if not s.empty:
+            s_sorted = s.sort_values(ascending=False).head(20).to_frame("mean").round(3)
+            st.dataframe(s_sorted, use_container_width=True)
+            fig = px.bar(s_sorted.reset_index(), x="index", y="mean", title=f"Top numeric means — {y}")
+            fig.update_layout(height=500, xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No numeric summary for selected year.")
+
+    # When two years selected -> compare
+    elif len(selected_years) == 2:
+        y1, y2 = selected_years
+        st.subheader(f"Comparison: {y1} vs {y2}")
+        s1 = numeric_means_for_year(y1)
+        s2 = numeric_means_for_year(y2)
+        common = s1.index.intersection(s2.index)
+        if len(common) == 0:
+            st.info("No common numeric columns to compare between the two years.")
+        else:
+            comp_df = pd.DataFrame({y1: s1[common], y2: s2[common]}).dropna()
+            st.markdown("### Means for common numeric columns (sample)")
+            st.dataframe(comp_df.round(3).sort_values(by=y1, ascending=False).head(50), use_container_width=True)
+
+            # bar chart (long)
+            long = comp_df.reset_index().melt(id_vars="index", value_vars=[y1, y2], var_name="year", value_name="mean")
+            fig = px.bar(long, x="index", y="mean", color="year", barmode="group", title=f"Mean comparison — {y1} vs {y2}")
+            fig.update_layout(height=700, xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
+
+            # correlation between mean vectors
+            try:
+                corr = comp_df[y1].corr(comp_df[y2])
+                st.write(f"Pearson correlation between mean vectors: {corr:.4f}")
+            except Exception:
+                st.info("Could not compute correlation between mean vectors.")
+
+    else:
+        st.info("Select at most 2 years for comparison in the sidebar.")
