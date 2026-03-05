@@ -429,77 +429,43 @@ elif tabs == "Cleaned data":
 
 elif tabs == "Inspection and reflection":
     st.title("Inspection & Reflection")
-    reports_dir = Path("cleaned_data/reports")
 
-    # helper loaders (local first, GitHub fallback)
-    @st.cache_data(show_spinner=False)
-    def load_json_local(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            return e
+    owner = "Soorej30"
+    repo = "wage_analysis"
+    branch = "main"
+    reports_base = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/cleaned_data/reports"
 
     @st.cache_data(show_spinner=False)
-    def load_text_local(path):
-        try:
-            return Path(path).read_text(encoding="utf-8")
-        except Exception as e:
-            return e
+    def load_json_github(raw_url):
+        r = requests.get(raw_url, timeout=15)
+        r.raise_for_status()
+        return r.json()
 
-    # try local files
-    insp_path = reports_dir / "consolidated_inspection.json"
-    refl_json_path = reports_dir / "consolidated_reflection.json"
-    refl_txt_path = reports_dir / "consolidated_reflection.txt"
+    @st.cache_data(show_spinner=False)
+    def load_text_github(raw_url):
+        r = requests.get(raw_url, timeout=15)
+        r.raise_for_status()
+        return r.text
 
     inspection = None
     reflection_text = None
 
-    if insp_path.exists():
-        inspection = load_json_local(insp_path)
-    else:
-        st.info("Local consolidated_inspection.json not found in cleaned_data/reports/.")
-    # reflection: prefer JSON, else TXT
-    if refl_json_path.exists():
-        reflection = load_json_local(refl_json_path)
-        if isinstance(reflection, dict):
-            reflection_text = json.dumps(reflection, indent=2)
-        else:
-            reflection_text = None
-    elif refl_txt_path.exists():
-        reflection_text = load_text_local(refl_txt_path)
-    else:
-        st.info("Local consolidated_reflection.* not found in cleaned_data/reports/.")
-
-    # If local missing, try GitHub raw fallback
-    if inspection is None or reflection_text is None:
-        owner = "Soorej30"
-        repo = "wage_analysis"
-        branch = "main"
-        base = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/cleaned_data/reports"
-        try:
-            if inspection is None:
-                r = requests.get(f"{base}/consolidated_inspection.json", timeout=10)
-                if r.ok:
-                    inspection = r.json()
-            if reflection_text is None:
-                # try json first
-                r2 = requests.get(f"{base}/consolidated_reflection.json", timeout=10)
-                if r2.ok:
-                    try:
-                        reflection_text = json.dumps(r2.json(), indent=2)
-                    except Exception:
-                        reflection_text = r2.text
-                else:
-                    r3 = requests.get(f"{base}/consolidated_reflection.txt", timeout=10)
-                    if r3.ok:
-                        reflection_text = r3.text
-        except Exception:
-            pass
-
-    if not inspection:
-        st.error("Could not load consolidated_inspection.json.")
+    # Load inspection JSON from GitHub
+    try:
+        inspection = load_json_github(f"{reports_base}/consolidated_inspection.json")
+    except Exception as e:
+        st.error(f"Could not load consolidated_inspection.json from GitHub: {e}")
         st.stop()
+
+    # Try JSON reflection first, fallback to TXT
+    try:
+        reflection_json = load_json_github(f"{reports_base}/consolidated_reflection.json")
+        reflection_text = json.dumps(reflection_json, indent=2)
+    except Exception:
+        try:
+            reflection_text = load_text_github(f"{reports_base}/consolidated_reflection.txt")
+        except Exception:
+            reflection_text = None
 
     # years available
     years = sorted(inspection.get("per_year", {}).keys(), reverse=True)
@@ -513,16 +479,13 @@ elif tabs == "Inspection and reflection":
         st.info("Choose at least one year from the sidebar.")
         st.stop()
 
-    # show overall JSON (collapsible)
     with st.expander("Raw consolidated_inspection.json (preview)"):
         st.json(inspection)
 
-    # show reflection
     if reflection_text:
         with st.expander("Reflection / notes"):
             st.text(reflection_text)
 
-    # When one year selected -> show summary table and top numeric means
     def numeric_means_for_year(year):
         ny = inspection["per_year"].get(year, {})
         ns = ny.get("numeric_summary", {})
@@ -557,7 +520,6 @@ elif tabs == "Inspection and reflection":
         else:
             st.info("No numeric summary for selected year.")
 
-    # When two years selected -> compare
     elif len(selected_years) == 2:
         y1, y2 = selected_years
         st.subheader(f"Comparison: {y1} vs {y2}")
@@ -571,18 +533,13 @@ elif tabs == "Inspection and reflection":
             st.markdown("### Means for common numeric columns (sample)")
             st.dataframe(comp_df.round(3).sort_values(by=y1, ascending=False).head(50), use_container_width=True)
 
-            # bar chart (long)
             long = comp_df.reset_index().melt(id_vars="index", value_vars=[y1, y2], var_name="year", value_name="mean")
             fig = px.bar(long, x="index", y="mean", color="year", barmode="group", title=f"Mean comparison — {y1} vs {y2}")
             fig.update_layout(height=700, xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
 
-            # correlation between mean vectors
             try:
                 corr = comp_df[y1].corr(comp_df[y2])
                 st.write(f"Pearson correlation between mean vectors: {corr:.4f}")
             except Exception:
                 st.info("Could not compute correlation between mean vectors.")
-
-    else:
-        st.info("Select at most 2 years for comparison in the sidebar.")
