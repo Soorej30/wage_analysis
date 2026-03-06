@@ -25,7 +25,7 @@ if st.sidebar.button("Refresh data / Clear cache"):
     # force a rerun so UI reloads (and cached loads will be re-fetched)
     st.experimental_rerun()
 
-tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Cleaned data", "Inspection and reflection", "Analysis", "Team"])
+tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Cleaned data", "Visualizations and Graphs", "Inspection and reflection", "Analysis", "Team"])
 page_width = 1200
 
 if tabs == "Introduction":
@@ -574,3 +574,198 @@ elif tabs == "Inspection and reflection":
                 st.write(f"Pearson correlation between mean vectors: {corr:.4f}")
             except Exception:
                 st.info("Could not compute correlation between mean vectors.")
+
+elif tabs == "Visualizations and Graphs":
+    st.title("Visualizations and Graphs")
+    st.markdown("Browse a set of curated graphs from the combined cleaned dataset. "
+                "Data source: cleaned_data/combined_data_by_year.csv (GitHub).")
+
+    owner = "Soorej30"
+    repo = "wage_analysis"
+    branch = "main"
+    raw_combined = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/cleaned_data/combined_data_by_year.csv"
+
+    @st.cache_data(show_spinner=False)
+    def load_combined_github(url):
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        df = pd.read_csv(io.BytesIO(r.content))
+        # basic cleaning / typing
+        # drop aggregated row label
+        if "OCC_TITLE" in df.columns:
+            df = df[df["OCC_TITLE"].astype(str).str.strip().str.lower() != "all occupations"]
+        # coerce numeric fields
+        for col in ["TOT_EMP", "H_MEAN", "A_MEAN", "H_MEDIAN",
+                    "H_PCT10", "H_PCT25", "H_PCT75", "H_PCT90",
+                    "A_PCT10", "A_PCT25", "A_PCT75", "A_PCT90",
+                    "EMP_PRSE", "MEAN_PRSE"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', ''), errors='coerce')
+        # ensure Year is numeric if present
+        if "Year" in df.columns:
+            df["Year"] = pd.to_numeric(df["Year"], errors='coerce').astype('Int64')
+        elif "year" in df.columns:
+            df["Year"] = pd.to_numeric(df["year"], errors='coerce').astype('Int64')
+        return df
+
+    try:
+        combined = load_combined_github(raw_combined)
+        # ensure there is a consistent lowercase 'year' column (Int64) for downstream code
+        if "Year" in combined.columns:
+            combined["year"] = pd.to_numeric(combined["Year"], errors="coerce").astype("Int64")
+        elif "year" in combined.columns:
+            combined["year"] = pd.to_numeric(combined["year"], errors="coerce").astype("Int64")
+        else:
+            # create empty nullable Int64 column to avoid KeyError
+            combined["year"] = pd.Series([pd.NA] * len(combined), dtype="Int64")
+    except Exception as e:
+        st.error(f"Could not load combined data from GitHub: {e}")
+        st.stop()
+
+    st.sidebar.markdown("Visualization controls")
+    years_available = sorted([int(y) for y in combined["year"].dropna().unique().tolist()]) if not combined["year"].dropna().empty else []
+    year_choice = st.sidebar.selectbox("Select year (or choose All)", ["All"] + [str(int(y)) for y in years_available], index=0)
+    top_n = st.sidebar.slider("Top N occupations / states to show", min_value=5, max_value=50, value=20, step=5)
+
+    if year_choice != "All":
+        df_v = combined[combined["year"] == int(year_choice)].copy()
+    else:
+        df_v = combined.copy()
+    
+
+    st.markdown("Field descriptions (reference)")
+    st.markdown("""
+    - AREA: The MSA code or the State fips code (Categorical)  
+    - ST / STATE: State abbreviation / name (Categorical)  
+    - OCC_CODE / OCC_TITLE: SOC code and title (Categorical)  
+    - GROUP: 'major' indicator for major group occupations (Categorical)  
+    - TOT_EMP: Estimated total employment (Numerical)  
+    - EMP_PRSE / MEAN_PRSE: Relative standard errors (Numerical)  
+    - H_MEAN / H_MEDIAN / H_PCT10..90: Hourly stats (Numerical)  
+    - A_MEAN / A_MEDIAN / A_PCT10..90: Annual stats (Numerical)  
+    - ANNUAL / HOURLY: Flags when only annual/hourly wage is released (Boolean)  
+    - Year: Year (Numerical)
+    """)
+
+    # 1) Trend: total employment by Year (line)
+    if "Year" in combined.columns and "TOT_EMP" in combined.columns:
+        agg_year = combined.groupby("Year", dropna=True)["TOT_EMP"].sum().reset_index()
+        st.markdown("### Total employment trend by Year")
+        st.write("Line chart showing the sum of TOT_EMP per year (all occupations & states).")
+        fig1 = px.line(agg_year, x="Year", y="TOT_EMP", markers=True, title="Total TOT_EMP by Year")
+        fig1.update_layout(height=500, yaxis_title="Total Employment")
+        st.plotly_chart(fig1, use_container_width=True)
+
+    # 2) Top occupations by total employment (bar)
+    if "OCC_TITLE" in df_v.columns and "TOT_EMP" in df_v.columns:
+        st.markdown("### Top occupations by total employment")
+        st.write(f"Bar chart of top {top_n} occupations by summed TOT_EMP (filtered year selection).")
+        occ_agg = df_v.groupby("OCC_TITLE", dropna=True)["TOT_EMP"].sum().nlargest(top_n).reset_index()
+        fig2 = px.bar(occ_agg, x="TOT_EMP", y="OCC_TITLE", orientation="h", title=f"Top {top_n} OCC_TITLE by TOT_EMP")
+        fig2.update_layout(height=700, yaxis={'categoryorder':'total ascending'}, margin=dict(l=250))
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # 3) Correlation heatmap for numeric features
+    st.markdown("### Correlation heatmap (numeric features)")
+    st.write("Shows pairwise Pearson correlation between numeric fields (H_MEAN, H_MEDIAN, TOT_EMP, etc.).")
+    numeric = df_v.select_dtypes(include=[np.number]).drop(columns=["Year"], errors='ignore')
+    if not numeric.empty:
+        corr = numeric.corr()
+        fig3 = px.imshow(corr, text_auto=True, color_continuous_scale="RdBu_r", title="Numeric feature correlations")
+        fig3.update_layout(height=700)
+        st.plotly_chart(fig3, use_container_width=True)
+    else:
+        st.info("No numeric columns available for correlation heatmap.")
+
+    # 4) State-level total employment (choropleth-like bar)
+    if "STATE" in df_v.columns and "TOT_EMP" in df_v.columns:
+        st.markdown("### Total employment by State (top states)")
+        st.write(f"Bar chart of top {top_n} states by total TOT_EMP.")
+        state_agg = df_v.groupby("STATE", dropna=True)["TOT_EMP"].sum().nlargest(top_n).reset_index()
+        fig4 = px.bar(state_agg, x="TOT_EMP", y="STATE", orientation="h", title=f"Top {top_n} STATES by TOT_EMP")
+        fig4.update_layout(height=600, yaxis={'categoryorder':'total ascending'}, margin=dict(l=200))
+        st.plotly_chart(fig4, use_container_width=True)
+
+    # 5) Pie chart: ANNUAL vs HOURLY rows
+    if "ANNUAL" in df_v.columns or "HOURLY" in df_v.columns:
+        st.markdown("### Distribution: ANNUAL vs HOURLY flagged rows")
+        st.write("Pie chart showing counts of rows flagged ANNUAL vs HOURLY (if present).")
+        flags = pd.Series(dtype=int)
+        if "ANNUAL" in df_v.columns:
+            flags = flags.add(df_v["ANNUAL"].fillna(False).astype(bool).value_counts(), fill_value=0)
+        if "HOURLY" in df_v.columns:
+            flags = flags.add(df_v["HOURLY"].fillna(False).astype(bool).value_counts(), fill_value=0)
+        # fallback: count unique ANNUAL values if booleans present
+        if flags.sum() > 0:
+            flag_df = flags.rename_axis("flag").reset_index(name="count")
+            fig5 = px.pie(flag_df, names="flag", values="count", title="ANNUAL/HOURLY flags distribution")
+            fig5.update_layout(height=500)
+            st.plotly_chart(fig5, use_container_width=True)
+        else:
+            st.info("No ANNUAL/HOURLY flags detected for pie chart.")
+
+    # 6) Box plot: H_MEDIAN by GROUP
+    if "H_MEDIAN" in df_v.columns and "GROUP" in df_v.columns:
+        st.markdown("### Hourly median wage by GROUP (box plot)")
+        st.write("Box plots of H_MEDIAN for each GROUP (shows spread / outliers).")
+        gp = df_v[df_v["GROUP"].notna() & df_v["GROUP"].astype(str).str.strip().ne("")]
+        if not gp.empty:
+            fig6 = px.box(gp, x="GROUP", y="H_MEDIAN", points="outliers", title="H_MEDIAN distribution by GROUP")
+            fig6.update_layout(height=600)
+            st.plotly_chart(fig6, use_container_width=True)
+        else:
+            st.info("No GROUP values available to plot H_MEDIAN by group.")
+
+    # 7) Stacked area: employment over time by GROUP (top groups)
+    if "Year" in combined.columns and "TOT_EMP" in combined.columns and "GROUP" in combined.columns:
+        st.markdown("### Employment over time by GROUP (stacked area)")
+        st.write("Area chart of TOT_EMP over years split by top groups (by total employment).")
+        grp_tot = combined.groupby("GROUP", dropna=True)["TOT_EMP"].sum().nlargest(6)
+        top_groups = grp_tot.index.dropna().tolist()
+        if top_groups:
+            area_df = (combined[combined["GROUP"].isin(top_groups)]
+                       .groupby(["Year", "GROUP"], dropna=True)["TOT_EMP"].sum()
+                       .reset_index())
+            fig7 = px.area(area_df, x="Year", y="TOT_EMP", color="GROUP", title="TOT_EMP over time by GROUP (top groups)")
+            fig7.update_layout(height=700)
+            st.plotly_chart(fig7, use_container_width=True)
+        else:
+            st.info("No GROUP values to build stacked area chart.")
+
+    # 8) Treemap: OCC_TITLE nested by STATE sized by TOT_EMP
+    if "OCC_TITLE" in df_v.columns and "STATE" in df_v.columns and "TOT_EMP" in df_v.columns:
+        st.markdown("### Treemap: Occupation -> State by TOT_EMP")
+        st.write("Treemap showing share of TOT_EMP by occupation and state (top occupations).")
+        treemap_df = df_v.groupby(["OCC_TITLE", "STATE"], dropna=True)["TOT_EMP"].sum().reset_index()
+        top_occ = treemap_df.groupby("OCC_TITLE")["TOT_EMP"].sum().nlargest(30).index.tolist()
+        treemap_df = treemap_df[treemap_df["OCC_TITLE"].isin(top_occ)]
+        fig8 = px.treemap(treemap_df, path=["OCC_TITLE", "STATE"], values="TOT_EMP", title="Treemap: OCC_TITLE -> STATE (by TOT_EMP)")
+        fig8.update_layout(height=800)
+        st.plotly_chart(fig8, use_container_width=True)
+
+    # 9) Scatter (bubble): H_MEDIAN vs TOT_EMP colored by Year, size TOT_EMP
+    if "H_MEDIAN" in df_v.columns and "TOT_EMP" in df_v.columns:
+        st.markdown("### Scatter: H_MEDIAN vs TOT_EMP (bubble sized by TOT_EMP, color by Year)")
+        st.write("Each point is an occupation (or occupation-state) showing relationship between median hourly wage and employment.")
+        scatter_df = df_v.groupby(["OCC_TITLE", "Year"], dropna=True).agg(TOT_EMP=("TOT_EMP", "sum"), H_MEDIAN=("H_MEDIAN", "median")).reset_index()
+        scatter_df = scatter_df.dropna(subset=["TOT_EMP", "H_MEDIAN"]).nlargest(200, "TOT_EMP")
+        fig9 = px.scatter(scatter_df, x="H_MEDIAN", y="TOT_EMP", size="TOT_EMP", color="Year",
+                          hover_name="OCC_TITLE", title="H_MEDIAN vs TOT_EMP (top records)")
+        fig9.update_layout(height=700)
+        st.plotly_chart(fig9, use_container_width=True)
+
+    # 10) Violin / distribution of H_MEDIAN for top 8 states
+    if "H_MEDIAN" in df_v.columns and "STATE" in df_v.columns:
+        st.markdown("### H_MEDIAN distribution by STATE (violin, top states)")
+        state_tot = df_v.groupby("STATE", dropna=True)["TOT_EMP"].sum().nlargest(8).index.tolist()
+        viol_df = df_v[df_v["STATE"].isin(state_tot) & df_v["H_MEDIAN"].notna()]
+        if not viol_df.empty:
+            fig10 = px.violin(viol_df, x="STATE", y="H_MEDIAN", box=True, points="outliers", title="H_MEDIAN distribution for top 8 states")
+            fig10.update_layout(height=700)
+            st.plotly_chart(fig10, use_container_width=True)
+        else:
+            st.info("Not enough H_MEDIAN data by state for violin plot.")
+
+    st.markdown("### Notes")
+    st.write("Charts limit items (top N) to keep visuals readable. Inspect raw data for full detail. "
+             "All numeric columns were coerced to numeric where possible; check for parsing issues if a field is empty.")
