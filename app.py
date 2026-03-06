@@ -15,6 +15,16 @@ st.set_page_config(page_title="Group 7 | Wage Variation Analysis", layout="wide"
 
 # Sidebar Navigation
 st.sidebar.title("Navigation")
+# quick refresh control to clear cached GitHub/local loads and reload the app
+if st.sidebar.button("Refresh data / Clear cache"):
+    # clear cached functions decorated with @st.cache_data
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
+    # force a rerun so UI reloads (and cached loads will be re-fetched)
+    st.experimental_rerun()
+
 tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Cleaned data", "Inspection and reflection", "Analysis", "Team"])
 page_width = 1200
 
