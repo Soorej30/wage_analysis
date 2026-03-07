@@ -25,7 +25,7 @@ if st.sidebar.button("Refresh data / Clear cache"):
     # force a rerun so UI reloads (and cached loads will be re-fetched)
     st.experimental_rerun()
 
-tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Cleaned data", "Visualizations and Graphs", "Inspection and reflection", "Analysis", "Team"])
+tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Data overview", "Cleaned data", "Data Exploration", "Inspection and reflection", "Analysis", "Team"])
 page_width = 1200
 
 if tabs == "Introduction":
@@ -575,8 +575,8 @@ elif tabs == "Inspection and reflection":
             except Exception:
                 st.info("Could not compute correlation between mean vectors.")
 
-elif tabs == "Visualizations and Graphs":
-    st.title("Visualizations and Graphs")
+elif tabs == "Data Exploration":
+    st.title("Data Exploration")
     st.markdown("Browse a set of curated graphs from the combined cleaned dataset. "
                 "Data source: cleaned_data/combined_data_by_year.csv (GitHub).")
 
