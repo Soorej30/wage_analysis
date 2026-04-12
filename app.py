@@ -13,6 +13,149 @@ import json
 # Page Configuration
 st.set_page_config(page_title="Group 7 | Wage Variation Analysis", layout="wide")
 
+MODELS_IMPLEMENTED = [
+    {
+        "name": "Random Forest Regressor",
+        "category": "Regression",
+        "target": "A_MEAN",
+        "why": [
+            "The target is continuous, so regression is the most direct formulation for wage prediction.",
+            "Random forests handle non-linear relationships well across many lagged wage and employment features.",
+            "The model is robust to mixed encoded categorical and numeric predictors.",
+        ],
+        "assumptions": [
+            "The historical training data is representative of future wage patterns.",
+            "Useful signal exists in non-linear interactions across lagged features.",
+            "Very deep trees can overfit, so depth and leaf-size controls matter.",
+        ],
+        "parameters": {
+            "candidate_grid": [
+                {"n_estimators": 80, "max_depth": 16, "min_samples_leaf": 1},
+                {"n_estimators": 120, "max_depth": 20, "min_samples_leaf": 1},
+                {"n_estimators": 120, "max_depth": None, "min_samples_leaf": 3},
+            ],
+        },
+        "metrics": [
+            {"metric": "RMSE", "value": None, "direction": "Lower is better", "notes": "Root mean squared error for wage prediction."},
+            {"metric": "R2", "value": None, "direction": "Higher is better", "notes": "Explained variance for continuous wage prediction."},
+        ],
+    },
+    {
+        "name": "Decision Tree Classifier",
+        "category": "Classification",
+        "target": "A_MEAN quartile band",
+        "why": [
+            "A classifier is useful when the question is wage-tier prediction instead of exact wage prediction.",
+            "Decision trees are easy to explain because they expose explicit feature splits.",
+            "Threshold-based splitting fits wage-band prediction naturally.",
+        ],
+        "assumptions": [
+            "Classes can be separated through recursive feature splits.",
+            "The quartile-based target transformation keeps wage tiers meaningful.",
+            "Unpruned trees can memorize noise, so complexity controls matter.",
+        ],
+        "parameters": {
+            "candidate_grid": [
+                {"max_depth": 6, "min_samples_leaf": 25, "criterion": "gini"},
+                {"max_depth": 10, "min_samples_leaf": 25, "criterion": "entropy"},
+                {"max_depth": None, "min_samples_leaf": 50, "criterion": "entropy"},
+            ],
+        },
+        "metrics": [
+            {"metric": "Accuracy", "value": None, "direction": "Higher is better", "notes": "Overall classification correctness."},
+            {"metric": "Precision", "value": None, "direction": "Higher is better", "notes": "Weighted precision across wage bands."},
+            {"metric": "Recall", "value": None, "direction": "Higher is better", "notes": "Weighted recall across wage bands."},
+            {"metric": "F1-score", "value": None, "direction": "Higher is better", "notes": "Weighted harmonic mean of precision and recall."},
+            {"metric": "ROC-AUC", "value": None, "direction": "Higher is better", "notes": "Weighted multiclass one-vs-rest ROC-AUC."},
+        ],
+    },
+    {
+        "name": "K-Means",
+        "category": "Clustering",
+        "target": "Unsupervised segmentation with A_MEAN used for interpretation",
+        "why": [
+            "K-Means is a strong baseline for grouping jobs into broad wage and labor-market profiles.",
+            "The notebook already uses numeric lag features that can be standardized effectively.",
+            "Cluster labels can become future engineered features for supervised models.",
+        ],
+        "assumptions": [
+            "Clusters are roughly spherical in scaled feature space.",
+            "Feature scaling is necessary because K-Means is distance-based.",
+            "The number of clusters must be selected in advance.",
+        ],
+        "parameters": {
+            "candidate_grid": [
+                {"n_clusters": 3, "n_init": 20, "random_state": 42},
+                {"n_clusters": 4, "n_init": 20, "random_state": 42},
+                {"n_clusters": 5, "n_init": 20, "random_state": 42},
+                {"n_clusters": 6, "n_init": 20, "random_state": 42},
+            ],
+        },
+        "metrics": [
+            {"metric": "Silhouette Score", "value": None, "direction": "Higher is better", "notes": "Measures cohesion and separation between clusters."},
+            {"metric": "Davies-Bouldin Index", "value": None, "direction": "Lower is better", "notes": "Measures similarity between clusters; lower is cleaner."},
+            {"metric": "Average Target Std", "value": None, "direction": "Higher is better", "notes": "Spread of mean target values across clusters for interpretability."},
+        ],
+    },
+    {
+        "name": "FP-Growth",
+        "category": "Frequent Pattern Mining",
+        "target": "High-pay association discovery",
+        "why": [
+            "FP-Growth reveals recurring combinations of state, occupation group, and lagged pay bands.",
+            "It scales better than Apriori for larger transaction-style datasets.",
+            "It adds interpretable high-pay rules even though it is not a direct predictor.",
+        ],
+        "assumptions": [
+            "The data can be converted into basket-style boolean items.",
+            "Meaningful structure exists in co-occurring categories and discretized numeric bands.",
+            "Support and confidence thresholds strongly shape the rules discovered.",
+        ],
+        "parameters": {
+            "candidate_grid": [
+                {"min_support": 0.05, "metric": "confidence", "min_threshold": 0.60},
+            ],
+        },
+        "metrics": [
+            {"metric": "Support", "value": None, "direction": "Higher is better", "notes": "How frequently a pattern appears in the data."},
+            {"metric": "Confidence", "value": None, "direction": "Higher is better", "notes": "Conditional strength of a rule."},
+            {"metric": "Lift", "value": None, "direction": "Higher is better", "notes": "Association strength relative to random co-occurrence."},
+            {"metric": "Rule Count", "value": None, "direction": "Higher is better", "notes": "Number of discovered high-pay rules."},
+        ],
+    },
+]
+
+
+def model_metric_frame():
+    rows = []
+    for model in MODELS_IMPLEMENTED:
+        for metric in model["metrics"]:
+            rows.append(
+                {
+                    "Model": model["name"],
+                    "Category": model["category"],
+                    "Metric": metric["metric"],
+                    "Direction": metric["direction"],
+                    "Notebook Value": metric["value"],
+                    "Notes": metric["notes"],
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def model_parameter_frame():
+    rows = []
+    for model in MODELS_IMPLEMENTED:
+        for param_set in model["parameters"]["candidate_grid"]:
+            rows.append(
+                {
+                    "Model": model["name"],
+                    "Category": model["category"],
+                    "Parameters": json.dumps(param_set),
+                }
+            )
+    return pd.DataFrame(rows)
+
 # Sidebar Navigation
 st.sidebar.title("Navigation")
 # quick refresh control to clear cached GitHub/local loads and reload the app
@@ -25,7 +168,7 @@ if st.sidebar.button("Refresh data / Clear cache"):
     # force a rerun so UI reloads (and cached loads will be re-fetched)
     st.experimental_rerun()
 
-tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Uncleaned Data overview", "Data Exploration", "Inspection and reflection", "Team"])
+tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Uncleaned Data overview", "Data Exploration", "Models Implemented", "Inspection and reflection", "Team"])
 page_width = 1200
 
 if tabs == "Introduction":
@@ -91,6 +234,84 @@ elif tabs == "Proposal Overview":
 
     for q in questions:
         st.write(q)
+
+elif tabs == "Models Implemented":
+    st.title("Models Implemented")
+    st.caption("A guided summary of the models built in `wage_analysis/notebooks/models.ipynb`.")
+
+    st.markdown("### Modeling Scope")
+    st.write(
+        "The notebook uses `A_MEAN` as the primary prediction target because annual mean wage is smoother and easier to interpret than "
+        "`H_MEAN`, while staying closely aligned with hourly wage behavior. The five-year lag features make the dataset a strong fit for "
+        "supervised prediction, segmentation, and association mining."
+    )
+    st.info(
+        "The notebook file currently does not store executed outputs, so this dashboard showcases the implemented models, the metrics "
+        "they report, the reasons they were chosen, and the parameter grids explored in the notebook."
+    )
+
+    st.markdown("### Model Cards")
+    for model in MODELS_IMPLEMENTED:
+        with st.expander(f"{model['name']} ({model['category']})", expanded=True):
+            col_a, col_b = st.columns([1.35, 1.0])
+            with col_a:
+                st.markdown(f"**Prediction focus:** {model['target']}")
+                st.markdown("**Why this model was chosen**")
+                for reason in model["why"]:
+                    st.write(f"- {reason}")
+                st.markdown("**Core assumptions**")
+                for assumption in model["assumptions"]:
+                    st.write(f"- {assumption}")
+
+            with col_b:
+                st.markdown("**Metrics used in the notebook**")
+                metric_df = pd.DataFrame(model["metrics"])[["metric", "direction", "notes"]]
+                metric_df.columns = ["Metric", "Direction", "Meaning"]
+                st.dataframe(metric_df, use_container_width=True, hide_index=True)
+
+                st.markdown("**Parameters explored**")
+                param_df = pd.DataFrame(model["parameters"]["candidate_grid"])
+                st.dataframe(param_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### All Metrics from the Notebook")
+    metrics_df = model_metric_frame()
+    st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### Parameter Summary")
+    st.dataframe(model_parameter_frame(), use_container_width=True, hide_index=True)
+
+    st.markdown("### Final Comparison Visualization")
+    st.write(
+        "These models belong to different ML families, so their raw scores are not directly comparable on a single scale. "
+        "The visual comparison below focuses on metric coverage and evaluation breadth across models."
+    )
+
+    coverage_df = metrics_df.assign(Covered=1).pivot(index="Model", columns="Metric", values="Covered").fillna(0)
+    fig_heatmap = px.imshow(
+        coverage_df,
+        text_auto=True,
+        aspect="auto",
+        color_continuous_scale=["#edf4fb", "#1f5f8b"],
+        title="Metric Coverage by Model",
+    )
+    fig_heatmap.update_layout(height=520, margin=dict(l=40, r=40, t=80, b=40), coloraxis_showscale=False)
+    st.plotly_chart(fig_heatmap, use_container_width=True)
+
+    metric_count_df = (
+        metrics_df.groupby(["Model", "Category"], as_index=False)["Metric"]
+        .count()
+        .rename(columns={"Metric": "Metric Count"})
+    )
+    fig_counts = px.bar(
+        metric_count_df,
+        x="Model",
+        y="Metric Count",
+        color="Category",
+        text="Metric Count",
+        title="How Many Metrics Each Model Reports",
+    )
+    fig_counts.update_layout(height=480, margin=dict(l=40, r=40, t=80, b=80))
+    st.plotly_chart(fig_counts, use_container_width=True)
 
 # elif tabs == "Analysis":
 #     st.title("Data analysis")
