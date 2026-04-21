@@ -424,9 +424,9 @@ elif tabs == "Conclusion":
         pink_layout(cp_fig, height=360)
         st.plotly_chart(cp_fig, use_container_width=True)
         st.markdown(
-            "Two low-wage clusters (~$46K) are separated mainly by employment precision error "
-            "(EMP_PRSE), not wage level. Cluster 2 is a clear high-wage group at **$109K**, "
-            "a $63K annual gap separates the labor market into two distinct tiers."
+            "Two low-wage clusters (\~\$46K) are separated mainly by employment precision error "
+            "(EMP_PRSE), not wage level. Cluster 2 is a clear high-wage group at **\$109K**, "
+            "a \$63K annual gap separates the labor market into two distinct tiers."
         )
 
     # FP-Growth
@@ -617,7 +617,7 @@ elif tabs == "Conclusion":
 **From the visualizations (Visualizations.ipynb):**
 
 - **Management occupations have the highest entry-level floor** ($46,335 at the 10th percentile), followed by Architecture & Engineering and Computer & Mathematical. These are the best fields for minimizing financial risk at career start.
-- **Management earns 18.7% more than Technical roles at the median** ($91,660 vs $74,470), and this gap is statistically confirmed (Mann-Whitney p ~ 0). Leadership commands a significant premium over technical expertise.
+- **Management earns 18.7% more than Technical roles at the median** (\$91,660 vs \$74,470), and this gap is statistically confirmed (Mann-Whitney p ~ 0). Leadership commands a significant premium over technical expertise.
 - **Nominal wages are misleading for geographic comparison.** After cost-of-living adjustment, Midwestern states (Illinois, Michigan, Minnesota) offer better purchasing power than coastal states. California's nominal advantage disappears entirely once CoL is factored in.
 - **Large workforces signal lower wages.** Across 973 occupations, higher employment correlates negatively with wages (r = −0.107). Fields that employ millions (retail, food service, care work) are systematically the lowest paid, regardless of the work's social value.
 
