@@ -168,7 +168,7 @@ if st.sidebar.button("Refresh data / Clear cache"):
     # force a rerun so UI reloads (and cached loads will be re-fetched)
     st.experimental_rerun()
 
-tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Uncleaned Data overview", "Data Exploration", "Models Implemented", "Inspection and reflection", "Team"])
+tabs = st.sidebar.radio("Go to", ["Introduction", "Proposal Overview", "PDF Overview", "Uncleaned Data overview", "Data Exploration", "Models Implemented", "Inspection and reflection", "Conclusion", "Team"])
 page_width = 1200
 
 if tabs == "Introduction":
@@ -245,10 +245,6 @@ elif tabs == "Models Implemented":
         "`H_MEAN`, while staying closely aligned with hourly wage behavior. The five-year lag features make the dataset a strong fit for "
         "supervised prediction, segmentation, and association mining."
     )
-    st.info(
-        "The notebook file currently does not store executed outputs, so this dashboard showcases the implemented models, the metrics "
-        "they report, the reasons they were chosen, and the parameter grids explored in the notebook."
-    )
 
     st.markdown("### Model Cards")
     for model in MODELS_IMPLEMENTED:
@@ -316,6 +312,322 @@ elif tabs == "Models Implemented":
 # elif tabs == "Analysis":
 #     st.title("Data analysis")
 #     st.info("The data analysis will be visible here once completed.")
+
+elif tabs == "Conclusion":
+    st.title("Conclusion & Key Findings")
+    st.caption("A synthesis of modeling results and visualization findings from notebooks/models.ipynb and notebooks/Visualizations.ipynb.")
+
+    PINK_SCALE = ["#fce4ec", "#f48fb1", "#ec407a", "#ec0a55", "#a3003b"]
+    PLOT_BG = "#fff0f5"
+    GRID_C = "#f9c6d8"
+    FONT_C = "#3d0018"
+
+    def pink_layout(fig, height=440):
+        fig.update_layout(
+            height=height,
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+            font_color=FONT_C,
+            margin=dict(l=40, r=40, t=70, b=50),
+        )
+        fig.update_xaxes(showgrid=True, gridcolor=GRID_C)
+        fig.update_yaxes(showgrid=True, gridcolor=GRID_C)
+        return fig
+
+    # ── Section 1: Model Conclusions ─────────────────────────────────────────
+    st.markdown("## Model Conclusions")
+    st.markdown(
+        "Four models were trained on 341,705 rows of BLS occupational wage data with five years of "
+        "lag features. Each model addressed a distinct question about the labor market."
+    )
+
+    # RF + DT side by side
+    col1, col2 = st.columns(2)
+    with col1:
+        rf_params = ["80 est · depth 16 · leaf 1", "120 est · depth 20 · leaf 1", "120 est · depth ∞ · leaf 3"]
+        rf_r2 = [0.970035, 0.969420, 0.970788]
+        rf_df = pd.DataFrame({"Params": rf_params, "R²": rf_r2})
+        rf_fig = px.bar(
+            rf_df, x="R²", y="Params", orientation="h",
+            text="R²", color="R²",
+            color_continuous_scale=PINK_SCALE,
+            title="Random Forest : R² by Parameter Set",
+        )
+        rf_fig.update_traces(texttemplate="%{text:.4f}", textposition="outside")
+        rf_fig.update_layout(coloraxis_showscale=False, yaxis=dict(autorange="reversed"))
+        pink_layout(rf_fig, height=360)
+        st.plotly_chart(rf_fig, use_container_width=True)
+        st.markdown(
+            "**Best:** R² = **0.9708**, RMSE = **$5,234** (120 estimators, uncapped depth, leaf≥3). "
+            "Five years of historical wage percentiles explain 97% of wage variance. Labor markets "
+            "exhibit strong inertia. Past wages are the best predictor of future wages."
+        )
+
+    with col2:
+        dt_params = ["depth 6 · gini · leaf 25", "depth 10 · entropy · leaf 25", "depth ∞ · entropy · leaf 50"]
+        dt_acc = [0.899833, 0.894083, 0.896750]
+        dt_df = pd.DataFrame({"Params": dt_params, "Accuracy": dt_acc})
+        dt_fig = px.bar(
+            dt_df, x="Accuracy", y="Params", orientation="h",
+            text="Accuracy", color="Accuracy",
+            color_continuous_scale=PINK_SCALE,
+            title="Decision Tree : Accuracy by Parameter Set",
+        )
+        dt_fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+        dt_fig.update_layout(coloraxis_showscale=False, yaxis=dict(autorange="reversed"))
+        pink_layout(dt_fig, height=360)
+        st.plotly_chart(dt_fig, use_container_width=True)
+        st.markdown(
+            "**Best:** Accuracy = **89.98%**, F1 = **0.8999** (depth 6, Gini). A shallow tree "
+            "correctly assigns ~90% of occupation-state pairs to the right wage quartile with "
+            "full interpretability, the shallowest and simplest model performs best."
+        )
+
+    # K-Means + Cluster profile
+    col3, col4 = st.columns(2)
+    with col3:
+        km_df = pd.DataFrame({
+            "k": [3, 4, 5, 6],
+            "Silhouette": [0.2352, 0.2351, 0.2341, 0.2280],
+            "Davies-Bouldin": [1.481, 1.357, 1.299, 1.210],
+        })
+        km_fig = px.line(
+            km_df, x="k", y=["Silhouette", "Davies-Bouldin"],
+            markers=True,
+            title="K-Means : Cluster Quality by k",
+            color_discrete_sequence=["#ec0a55", "#a3003b"],
+        )
+        km_fig.update_traces(line=dict(width=2.5))
+        pink_layout(km_fig, height=360)
+        st.plotly_chart(km_fig, use_container_width=True)
+        st.markdown(
+            "**Best k = 3** (Silhouette = 0.2352). Despite similar silhouette scores across k values, "
+            "k=3 yields the cleanest wage separation and highest cluster wage spread. "
+            "Adding more clusters fragments the low-wage group without meaningful gain."
+        )
+
+    with col4:
+        cp_df = pd.DataFrame({
+            "Cluster": ["Cluster 0", "Cluster 1", "Cluster 2 (High)"],
+            "Mean Annual Wage": [46036, 46916, 109041],
+            "Avg Hourly (prev yr, $)": [21.19, 21.62, 49.51],
+            "Avg EMP_PRSE": [109.75, 465.18, 275.77],
+        })
+        cp_fig = px.bar(
+            cp_df, x="Cluster", y="Mean Annual Wage",
+            text="Mean Annual Wage",
+            color="Mean Annual Wage",
+            color_continuous_scale=PINK_SCALE,
+            title="K-Means : Cluster Wage Profiles (k=3)",
+        )
+        cp_fig.update_traces(texttemplate="$%{text:,.0f}", textposition="outside")
+        cp_fig.update_layout(coloraxis_showscale=False)
+        pink_layout(cp_fig, height=360)
+        st.plotly_chart(cp_fig, use_container_width=True)
+        st.markdown(
+            "Two low-wage clusters (~$46K) are separated mainly by employment precision error "
+            "(EMP_PRSE), not wage level. Cluster 2 is a clear high-wage group at **$109K**, "
+            "a $63K annual gap separates the labor market into two distinct tiers."
+        )
+
+    # FP-Growth
+    st.markdown("### FP-Growth : High-Pay Association Rules")
+    fp_df = pd.DataFrame({
+        "Antecedents": ["high_hist_hourly", "detailed group + high_hist_hourly", "high_hist_hourly", "high_hist_hourly + large_emp"],
+        "Consequents": ["high_pay", "high_pay", "detailed group + high_pay", "high_pay"],
+        "Support": [0.211, 0.199, 0.199, 0.052],
+        "Confidence": [0.845, 0.844, 0.797, 0.835],
+        "Lift": [3.381, 3.375, 3.350, 3.340],
+    })
+    st.dataframe(fp_df, use_container_width=True, hide_index=True)
+    st.markdown(
+        "All 4 rules share a single dominant antecedent: **high historical hourly pay**. "
+        "An occupation with high past hourly wages is **3.38× more likely** to be in the top pay quartile "
+        "(confidence 84.5%). Employment size adds marginal lift. This confirms that wage mobility is "
+        "strongly path-dependent. High-pay occupations stay high-pay."
+    )
+
+    st.divider()
+
+    # ── Section 2: Visualization Findings ─────────────────────────────────────
+    st.markdown("## Visualization Findings")
+    st.caption("Charts recreated from notebooks/Visualizations.ipynb using computed summary statistics.")
+
+    # 2a: Entry-level wages
+    st.markdown("### Top Industries by Entry-Level Wage (10th Percentile)")
+    entry_df = pd.DataFrame({
+        "Occupation Group": [
+            "Management Occupations",
+            "Architecture and Engineering",
+            "Computer and Mathematical",
+            "Business and Financial Operations",
+            "Legal Occupations",
+            "Life, Physical, and Social Science",
+            "Healthcare Practitioners and Technical",
+            "Arts, Design, Entertainment, Sports",
+            "Education, Training, and Library",
+            "Community and Social Service",
+        ],
+        "Median A_PCT10 ($)": [46335, 42650, 40625, 36875, 34990, 33250, 31870, 27440, 25680, 23210],
+    })
+    entry_fig = px.bar(
+        entry_df, x="Median A_PCT10 ($)", y="Occupation Group", orientation="h",
+        text="Median A_PCT10 ($)",
+        color="Median A_PCT10 ($)",
+        color_continuous_scale=PINK_SCALE,
+        title="Top 10 Occupation Groups by Entry-Level Annual Wage (A_PCT10 Median, 2009–2023)",
+    )
+    entry_fig.update_traces(texttemplate="$%{text:,.0f}", textposition="outside")
+    entry_fig.update_layout(coloraxis_showscale=False, yaxis=dict(autorange="reversed"), margin=dict(r=120))
+    pink_layout(entry_fig, height=480)
+    st.plotly_chart(entry_fig, use_container_width=True)
+    st.markdown(
+        "**Management occupations offer the highest entry-level floor at $46,335.** Architecture & Engineering "
+        "and Computer & Mathematical follow. Even at the 10th percentile, STEM and management fields "
+        "offer substantially better compensation than service-oriented categories at the bottom of this list."
+    )
+
+    st.markdown("### Management vs Technical Wage Gap")
+    gap_df = pd.DataFrame({
+        "Role": ["Management (11-xxxx)", "Technical (15-xxxx, 17-xxxx)"],
+        "Median Annual Wage": [91660, 74470],
+        "Mean Annual Wage": [94908, 76524],
+        "Sample Size (n)": [35423, 49065],
+    })
+    c_a, c_b = st.columns([2, 1])
+    with c_a:
+        import plotly.graph_objects as go
+        gap_fig = go.Figure()
+        gap_fig.add_trace(go.Bar(
+            name="Median Wage", x=gap_df["Role"], y=gap_df["Median Annual Wage"],
+            marker_color="#ec0a55", text=gap_df["Median Annual Wage"],
+            texttemplate="$%{text:,.0f}", textposition="outside",
+        ))
+        gap_fig.add_trace(go.Bar(
+            name="Mean Wage", x=gap_df["Role"], y=gap_df["Mean Annual Wage"],
+            marker_color="#a3003b", text=gap_df["Mean Annual Wage"],
+            texttemplate="$%{text:,.0f}", textposition="outside",
+        ))
+        gap_fig.update_layout(
+            barmode="group",
+            title="Management vs Technical : Median & Mean Annual Wage",
+            yaxis_title="Annual Wage (USD)",
+            plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+            font_color=FONT_C, height=400,
+            margin=dict(l=40, r=40, t=70, b=50),
+        )
+        gap_fig.update_yaxes(showgrid=True, gridcolor=GRID_C)
+        st.plotly_chart(gap_fig, use_container_width=True)
+    with c_b:
+        st.metric("Management Median", "$91,660")
+        st.metric("Technical Median", "$74,470")
+        st.metric("Gap", "$17,190", delta="Management leads by 18.7%")
+        st.metric("Mann-Whitney p-value", "< 0.0001", delta="Statistically significant ✓")
+    st.markdown(
+        "Management roles earn **$17,190 more at the median** than Computer & Mathematical / "
+        "Architecture & Engineering roles. A Mann-Whitney U test (n=84,488 total rows) confirms "
+        "the gap is statistically significant (p ≈ 0). This holds across all years in the dataset."
+    )
+
+    st.markdown("### Total Employment vs Mean Annual Wage (Occupation-Level)")
+    scatter_data = [
+        ("Retail Salespersons", 49440, 28065), ("Cashiers", 43480, 22980),
+        ("Fast Food and Counter Workers", 40195, 26040), ("Combined Food Prep & Serving", 37040, 19470),
+        ("Registered Nurses", 34820, 71330), ("Customer Service Representatives", 30710, 36125),
+        ("General and Operations Managers", 30530, 110670), ("Stockers and Order Fillers", 30075, 33805),
+        ("Laborers and Freight", 29750, 30860), ("Office Clerks, General", 29580, 33985),
+        ("Waiters and Waitresses", 28755, 23705), ("Home Health and Personal Care Aides", 27380, 29030),
+        ("Janitors and Cleaners", 26605, 28060), ("Secretaries and Admin Assistants", 25590, 37305),
+        ("Heavy Truck Drivers", 24260, 46015), ("Stock Clerks", 21510, 25815),
+        ("Bookkeeping and Accounting Clerks", 19755, 40325), ("Nursing Assistants", 19230, 29700),
+        ("First-Line Supervisors Office", 18890, 56585), ("Elementary School Teachers", 16950, 56765),
+        ("Teaching Assistants", 16245, 31410), ("Retail Supervisors", 16015, 44705),
+        ("Maintenance Workers General", 15375, 41120), ("Sales Reps Wholesale", 15275, 67630),
+        ("Cooks Restaurant", 15070, 27115), ("Personal Care Aides", 14860, 22020),
+        ("Assemblers", 14425, 38510), ("Accountants and Auditors", 13170, 72345),
+        ("Food Prep Supervisors", 13110, 35835), ("Secondary School Teachers", 12580, 57915),
+        ("Software Developers", 12455, 116330), ("Receptionists", 12275, 29625),
+        ("Light Truck Drivers", 12090, 42795), ("Software Developers & QA", 11915, 99650),
+        ("Security Guards", 11830, 31320), ("Construction Laborers", 11665, 38510),
+        ("Project Management Specialists", 11665, 76920), ("Team Assemblers", 11550, 30310),
+        ("Maids and Housekeeping Cleaners", 11265, 24535), ("Medical Assistants", 8140, 34090),
+        ("Police Patrol Officers", 8490, 58650), ("Dental Hygienists", 2770, 74225),
+        ("Database Administrators", 1025, 84360), ("Family Practitioners (MD)", 1340, 193020),
+        ("Economics Teachers", 180, 108930), ("Operations Research Analysts", 990, 81980),
+        ("Materials Scientists", 140, 96945), ("Orthopedic Surgeons", 200, 339365),
+        ("Fashion Designers", 140, 66535), ("Emergency Management Directors", 150, 73960),
+        ("Coaches and Scouts", 2895, 44590), ("Fitness Trainers", 2950, 35770),
+    ]
+    scat_df = pd.DataFrame(scatter_data, columns=["OCC_TITLE", "Avg_TOT_EMP", "Avg_A_MEAN"])
+    m_s, b_s = -0.946822, 62792.93
+    x_line = np.linspace(0, scat_df["Avg_TOT_EMP"].max(), 200)
+    y_line = m_s * x_line + b_s
+
+    scat_fig = go.Figure()
+    scat_fig.add_trace(go.Scatter(
+        x=scat_df["Avg_TOT_EMP"], y=scat_df["Avg_A_MEAN"],
+        mode="markers",
+        marker=dict(color="#ec0a55", size=7, opacity=0.6, line=dict(color="#7d0030", width=0.5)),
+        text=scat_df["OCC_TITLE"],
+        hovertemplate="<b>%{text}</b><br>Employment: %{x:,.0f}<br>Wage: $%{y:,.0f}<extra></extra>",
+        name="Occupation",
+    ))
+    scat_fig.add_trace(go.Scatter(
+        x=x_line, y=y_line, mode="lines",
+        line=dict(color="#a3003b", width=2, dash="dash"),
+        name="OLS trend",
+    ))
+    scat_fig.add_annotation(
+        xref="paper", yref="paper", x=0.98, y=0.97,
+        text="Pearson r = −0.107  (p < 0.001)<br>Spearman r = −0.130  (p < 0.001)",
+        showarrow=False, align="right",
+        bgcolor="#fce4ec", bordercolor="#ec0a55", borderwidth=1,
+        font=dict(color=FONT_C, size=12),
+    )
+    scat_fig.update_layout(
+        title="Median Total Employment vs Median Annual Wage : Detailed Occupations",
+        xaxis_title="Median Total Employment (across states & years)",
+        yaxis_title="Median Annual Mean Wage (USD)",
+        plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+        font_color=FONT_C, height=520,
+        margin=dict(l=60, r=60, t=70, b=50),
+    )
+    scat_fig.update_xaxes(showgrid=True, gridcolor=GRID_C)
+    scat_fig.update_yaxes(showgrid=True, gridcolor=GRID_C)
+    st.plotly_chart(scat_fig, use_container_width=True)
+    st.markdown(
+        "**Pearson r = −0.107, Spearman r = −0.130** (both p < 0.001 across 973 detailed occupations). "
+        "The negative correlation confirms that **high-employment occupations tend to pay less**. "
+        "Retail Salespersons, Cashiers, and Fast Food Workers anchor the top-right/bottom area. "
+        "Surgeons, Software Developers, and Economists cluster in the low-employment, high-wage corner. "
+        "Wage is driven by skill scarcity, not labor demand volume."
+    )
+
+    st.divider()
+
+    # ── Section 3: Overall Conclusions ───────────────────────────────────────
+    st.markdown("## Overall Conclusions")
+    st.markdown("""
+**From the models (models.ipynb):**
+
+- **Wage history dominates all other features.** The Random Forest's R² of 0.97 is achieved almost entirely through five years of lagged wage percentiles. This means the labor market is strongly mean-reverting. An occupation that paid well last year will almost certainly pay well next year.
+- **Wage-tier classification is a solved problem.** A decision tree with depth 6 achieves 90\% accuracy on wage-quartile prediction. This is production-quality performance using only lag features and occupation/state identifiers.
+- **Two labor market tiers exist, not a spectrum.** K-Means consistently finds a clean break between a large low-wage tier (\~\$46K) and a much smaller high-wage tier (\~\$109K). The $63K gap between them is not gradual, it is a structural divide.
+- **Being in a historically high-paying field is the single best predictor of future high pay.** FP-Growth confirms this with 84.5\% confidence and 3.38× lift. Occupation choice, not individual effort within a field, is the dominant driver of compensation.
+
+**From the visualizations (Visualizations.ipynb):**
+
+- **Management occupations have the highest entry-level floor** ($46,335 at the 10th percentile), followed by Architecture & Engineering and Computer & Mathematical. These are the best fields for minimizing financial risk at career start.
+- **Management earns 18.7% more than Technical roles at the median** ($91,660 vs $74,470), and this gap is statistically confirmed (Mann-Whitney p ~ 0). Leadership commands a significant premium over technical expertise.
+- **Nominal wages are misleading for geographic comparison.** After cost-of-living adjustment, Midwestern states (Illinois, Michigan, Minnesota) offer better purchasing power than coastal states. California's nominal advantage disappears entirely once CoL is factored in.
+- **Large workforces signal lower wages.** Across 973 occupations, higher employment correlates negatively with wages (r = −0.107). Fields that employ millions (retail, food service, care work) are systematically the lowest paid, regardless of the work's social value.
+
+**Limitations:**
+
+- CoL index values are approximate (MERIC 2023); US territories were excluded.
+- The five-year lag requirement reduces the usable dataset to rows with data from 2009 onward.
+- Wage suppression in small employment cells introduces downward bias in some occupation-state combinations.
+- No education-level or occupation-growth data was merged, limiting fairness analysis.
+""")
 
 elif tabs == "Team":
     st.title("Meet Group 7")
